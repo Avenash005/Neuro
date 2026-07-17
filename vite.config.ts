@@ -6,7 +6,7 @@ import svgr from 'vite-plugin-svgr'
 // Custom plugin to handle ?import&react syntax (alias to ?react)
 const svgImportPlugin = () => ({
   name: 'svg-import-alias',
-  resolveId(id) {
+  resolveId(id: string) {
     // Transform ?import&react to ?react for vite-plugin-svgr
     if (id.includes('?import&react')) {
       return id.replace('?import&react', '?react');
@@ -16,7 +16,7 @@ const svgImportPlugin = () => ({
 });
 
 // https://vite.dev/config/
-export default defineConfig(({ command }) => ({
+export default defineConfig({
   plugins: [
     react(),
     tailwindcss(),
@@ -37,4 +37,16 @@ export default defineConfig(({ command }) => ({
     allowedHosts: true,
     hmr: false,
   },
-}))
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('@supabase')) return 'supabase';
+          if (id.includes('framer-motion') || id.includes('motion-dom') || id.includes('motion-utils')) return 'motion';
+          if (id.includes('react-dom') || id.includes('node_modules/react/')) return 'react-vendor';
+          if (id.includes('lucide-react')) return 'icons';
+        },
+      },
+    },
+  },
+})
