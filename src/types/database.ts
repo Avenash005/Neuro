@@ -22,6 +22,7 @@ export type Database = {
           file_size: number | null;
           extracted_text: string | null;
           extracted_at: string | null;
+          content_fingerprint: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -43,6 +44,7 @@ export type Database = {
           file_size?: number | null;
           extracted_text?: string | null;
           extracted_at?: string | null;
+          content_fingerprint?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -64,6 +66,7 @@ export type Database = {
           file_size?: number | null;
           extracted_text?: string | null;
           extracted_at?: string | null;
+          content_fingerprint?: string | null;
           created_at?: string;
           updated_at?: string;
         };

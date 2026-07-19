@@ -1,5 +1,6 @@
 import { createClient, type Provider, type User } from "@supabase/supabase-js";
 import type { Database } from "../types/database";
+import { createFileFingerprint, createLinkFingerprint } from "./deduplication";
 import { runMemoryDeletion } from "./memoryDeletion";
 import { sanitizeFilename, validateUpload } from "./uploads";
 
@@ -24,6 +25,16 @@ export type MemoryRecord = MemoryInput & {
   extracted_text: string | null;
   extracted_at: string | null;
 };
+
+export class DuplicateMemoryError extends Error {
+  readonly existingMemoryId?: string;
+
+  constructor(message: string, existingMemoryId?: string) {
+    super(message);
+    this.name = "DuplicateMemoryError";
+    this.existingMemoryId = existingMemoryId;
+  }
+}
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.trim();
 const supabasePublishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY?.trim();
@@ -105,9 +116,39 @@ export async function signOutToGuest() {
   return ensureUser();
 }
 
+async function rejectExistingFingerprint(fingerprint: string, sourceLabel: "file" | "link") {
+  if (!supabase) throw new Error("Supabase is not configured.");
+  const { data, error } = await supabase
+    .from("memories")
+    .select("id, title")
+    .eq("content_fingerprint", fingerprint)
+    .limit(1)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (data) {
+    throw new DuplicateMemoryError(
+      `This ${sourceLabel} is already saved as “${data.title}”.`,
+      data.id,
+    );
+  }
+}
+
+function duplicateRaceError(sourceLabel: "file" | "link") {
+  return new DuplicateMemoryError(`This ${sourceLabel} is already saved in your Library.`);
+}
+
 export async function createMemory(input: MemoryInput) {
   if (!supabase) throw new Error("Add your Supabase publishable key to .env.local first.");
   const user = await ensureUser();
+  let sourceUrl = input.sourceUrl ?? null;
+  let contentFingerprint: string | null = null;
+  if (input.kind === "Link") {
+    if (!sourceUrl) throw new Error("Enter a link before saving.");
+    const linkIdentity = await createLinkFingerprint(sourceUrl);
+    sourceUrl = linkIdentity.canonicalUrl;
+    contentFingerprint = linkIdentity.fingerprint;
+    await rejectExistingFingerprint(contentFingerprint, "link");
+  }
   const { data, error } = await supabase
     .from("memories")
     .insert({
@@ -116,11 +157,13 @@ export async function createMemory(input: MemoryInput) {
       content: input.content,
       kind: input.kind.toLowerCase(),
       processing_status: "pending",
-      source_url: input.sourceUrl ?? null,
+      source_url: sourceUrl,
+      content_fingerprint: contentFingerprint,
     })
     .select("id, title, content, kind, processing_status, created_at, storage_path, original_filename, mime_type, file_size, summary, extracted_text, extracted_at")
     .single();
 
+  if (error?.code === "23505" && contentFingerprint) throw duplicateRaceError("link");
   if (error) throw error;
   return normalizeMemory(data);
 }
@@ -142,6 +185,8 @@ export async function createFileMemory(file: File, title: string) {
   if (!supabase) throw new Error("Supabase is not configured.");
   validateUpload(file);
   const user = await ensureUser();
+  const contentFingerprint = await createFileFingerprint(file);
+  await rejectExistingFingerprint(contentFingerprint, "file");
   const path = `${user.id}/${crypto.randomUUID()}-${sanitizeFilename(file.name)}`;
   const bucket = "memory-files";
 
@@ -165,12 +210,14 @@ export async function createFileMemory(file: File, title: string) {
       original_filename: file.name,
       mime_type: file.type,
       file_size: file.size,
+      content_fingerprint: contentFingerprint,
     })
     .select("id, title, content, kind, processing_status, created_at, storage_path, original_filename, mime_type, file_size, summary, extracted_text, extracted_at")
     .single();
 
   if (error) {
     await supabase.storage.from(bucket).remove([path]);
+    if (error.code === "23505") throw duplicateRaceError("file");
     throw error;
   }
   return normalizeMemory(data);

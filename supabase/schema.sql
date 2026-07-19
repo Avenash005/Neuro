@@ -12,6 +12,7 @@ create table if not exists public.memories (
   tags text[] not null default '{}',
   metadata jsonb not null default '{}',
   processing_status text not null default 'pending' check (processing_status in ('pending', 'processing', 'ready', 'failed')),
+  content_fingerprint text check (content_fingerprint is null or content_fingerprint ~ '^(file|link):[0-9a-f]{64}$'),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -99,6 +100,11 @@ create trigger on_auth_user_created after insert on auth.users
 for each row execute function public.handle_new_user();
 
 -- Phase 2B: private universal capture and processing queue.
+alter table public.memories add column if not exists content_fingerprint text
+check (content_fingerprint is null or content_fingerprint ~ '^(file|link):[0-9a-f]{64}$');
+create unique index if not exists memories_user_content_fingerprint_uidx
+on public.memories (user_id, content_fingerprint)
+where content_fingerprint is not null;
 alter table public.memories add column if not exists storage_bucket text;
 alter table public.memories add column if not exists storage_path text;
 alter table public.memories add column if not exists original_filename text;
