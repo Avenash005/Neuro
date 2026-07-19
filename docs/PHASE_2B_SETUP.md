@@ -41,6 +41,12 @@ Migration `20260719000400_memory_deduplication.sql` adds an owner-scoped unique 
 
 Existing rows are left unchanged because private historical files cannot be safely re-hashed from a SQL migration. Newly captured files and links receive fingerprints automatically.
 
+## Signed uploads and progress
+
+The authenticated browser requests a single-use signed upload URL from the private `memory-files` bucket. The signed URL remains in memory and expires automatically; it is never stored in the database or application logs. The upload uses Supabase's multipart signed-upload contract through `XMLHttpRequest` so Neuron can show real byte progress and cancel an in-flight request.
+
+If the upload succeeds but memory creation fails, Neuron removes the uploaded object before returning the error. Closing the Capture modal aborts the active request. Signed URL creation still requires the owner's storage `insert` policy; using the signed URL itself requires no additional authorization header.
+
 ## Security model
 
 - The bucket is private.
@@ -49,4 +55,5 @@ Existing rows are left unchanged because private historical files cannot be safe
 - Memory rows and processing status remain protected by database RLS.
 - Permanent deletion removes the private source object before deleting the memory; the memory foreign-key cascade removes its processing jobs.
 - Duplicate fingerprints are unique within one owner account and remain invisible across accounts through memory RLS.
+- Signed upload tokens are short-lived, kept in browser memory only, and scoped to one private object path.
 - Validation runs in the browser and is repeated by the bucket's MIME and size constraints. A later worker must still treat all content as untrusted and perform malware/content inspection.

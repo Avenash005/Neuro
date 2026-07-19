@@ -97,6 +97,8 @@ Library rows open a complete memory detail view. Signed-in owners can retry proc
 
 New files and links are protected against duplicate saves with owner-scoped fingerprints. Files are matched by content, while links are canonicalized before comparison.
 
+Private file capture uses short-lived Supabase signed upload URLs with real progress and cancellation. Failed post-upload database writes trigger source-object cleanup.
+
 ## Quality checks
 
 ```bash
