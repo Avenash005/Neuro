@@ -35,6 +35,12 @@ The database automatically creates one queued job per captured source:
 
 Jobs remain queued until the Phase 2B processing worker is deployed. Continue with [PHASE_2B_WORKER.md](PHASE_2B_WORKER.md). The UI exposes queued/processing/failed states, retry controls, private downloads, readable memory details, and confirmed permanent deletion.
 
+## Duplicate protection
+
+Migration `20260719000400_memory_deduplication.sql` adds an owner-scoped unique fingerprint. New uploads are identified by a SHA-256 digest of their bytes, so renaming a file does not bypass duplicate protection. New links are canonicalized before hashing: fragments and common tracking parameters are removed and query parameters are sorted. A pre-check provides a useful message, while the database index protects concurrent saves.
+
+Existing rows are left unchanged because private historical files cannot be safely re-hashed from a SQL migration. Newly captured files and links receive fingerprints automatically.
+
 ## Security model
 
 - The bucket is private.
@@ -42,4 +48,5 @@ Jobs remain queued until the Phase 2B processing worker is deployed. Continue wi
 - Storage RLS permits users to insert, read, and delete only their own objects.
 - Memory rows and processing status remain protected by database RLS.
 - Permanent deletion removes the private source object before deleting the memory; the memory foreign-key cascade removes its processing jobs.
+- Duplicate fingerprints are unique within one owner account and remain invisible across accounts through memory RLS.
 - Validation runs in the browser and is repeated by the bucket's MIME and size constraints. A later worker must still treat all content as untrusted and perform malware/content inspection.

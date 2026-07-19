@@ -18,6 +18,7 @@ import {
   onAuthChange,
   processMemoryNow,
   retryMemoryProcessing,
+  DuplicateMemoryError,
   type MemoryInput,
   type MemoryRecord,
 } from "./lib/supabase";
@@ -147,6 +148,10 @@ export default function App() {
       showToast(file ? `“${memory.title}” uploaded privately and queued` : `“${memory.title}” is synced to Supabase`);
       if (savedMemory.kind !== "Note") void processSavedMemory(savedMemory.id);
     } catch (error) {
+      if (error instanceof DuplicateMemoryError) {
+        showToast(error.message);
+        throw error;
+      }
       setBackendStatus("error");
       const message = error instanceof Error ? error.message : "Unknown Supabase error";
       showToast(`Could not save: ${message}`);

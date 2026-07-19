@@ -1,0 +1,3 @@
+-- Legacy migration recorded by the Supabase project before this repository's
+-- versioned Phase 2 migrations were introduced. The live project already
+-- contains it; this placeholder preserves migration-history alignment.

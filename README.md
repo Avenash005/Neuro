@@ -95,6 +95,8 @@ After applying the capture migration, deploy the processing worker using [docs/P
 
 Library rows open a complete memory detail view. Signed-in owners can retry processing, download private source files, or permanently delete a memory and its associated private file.
 
+New files and links are protected against duplicate saves with owner-scoped fingerprints. Files are matched by content, while links are canonicalized before comparison.
+
 ## Quality checks
 
 ```bash
