@@ -7,12 +7,17 @@ Neuron is a personal knowledge workspace for capturing notes, links, files, and 
 - Responsive dashboard, library, collections, and knowledge graph UI
 - Note, link, upload, and voice capture flows
 - Supabase anonymous authentication
+- Permanent email account upgrades and returning-user magic-link sign-in
+- Google/GitHub identity-linking UI
 - Supabase-backed memory creation and listing
 - Owner-only Row Level Security policies
+- Versioned SQL migrations and typed database access
+- Error boundary, unit tests, and GitHub Actions CI
 - Semantic-search and AI-assistant interface prototypes
 - Strict TypeScript and production builds
 
 The production roadmap is in [docs/PRODUCTION_PLAN.md](docs/PRODUCTION_PLAN.md).
+Phase 2A dashboard setup is in [docs/PHASE_2A_SETUP.md](docs/PHASE_2A_SETUP.md).
 
 ## Branches
 
@@ -42,9 +47,11 @@ src/
 └── main.tsx                # React entry point
 
 supabase/
-└── schema.sql              # Database tables, indexes, triggers, and RLS
+├── migrations/             # Versioned, replayable database changes
+└── schema.sql              # Current database schema reference
 
 docs/
+├── PHASE_2A_SETUP.md       # Required Supabase dashboard configuration
 └── PRODUCTION_PLAN.md      # Architecture mind map and delivery roadmap
 ```
 
@@ -86,7 +93,13 @@ npx tsc --noEmit
 npm run build
 ```
 
-Both commands must pass before merging a branch.
+Or run the complete local/CI gate:
+
+```bash
+npm run check
+```
+
+The command runs type-checking, unit tests, and the production build. It must pass before merging a branch.
 
 ## Editing guide
 

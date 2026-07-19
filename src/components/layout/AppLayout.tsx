@@ -27,9 +27,12 @@ type SidebarProps = {
   activeView: View;
   setActiveView: (view: View) => void;
   openCapture: () => void;
+  profileName: string;
+  profileSubtitle: string;
+  onProfileClick: () => void;
 };
 
-export function Sidebar({ activeView, setActiveView, openCapture }: SidebarProps) {
+export function Sidebar({ activeView, setActiveView, openCapture, profileName, profileSubtitle, onProfileClick }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(false);
   const nav = [
     { label: "Home" as View, icon: Home },
@@ -62,7 +65,7 @@ export function Sidebar({ activeView, setActiveView, openCapture }: SidebarProps
       )}
       <div className="sidebar-bottom">
         <button title="Settings"><Settings size={19} />{!collapsed && <span>Settings</span>}</button>
-        <button className="profile-button" title="Profile"><span className="avatar">AV</span>{!collapsed && <span className="profile-copy"><strong>Avenash</strong><small>Personal space</small></span>}</button>
+        <button className="profile-button" title="Profile and account" onClick={onProfileClick}><span className="avatar">{profileName.slice(0, 2).toUpperCase()}</span>{!collapsed && <span className="profile-copy"><strong>{profileName}</strong><small>{profileSubtitle}</small></span>}</button>
       </div>
     </aside>
   );
