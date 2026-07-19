@@ -26,9 +26,11 @@ export function CaptureModal({ onClose, onSave }: CaptureModalProps) {
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [dragActive, setDragActive] = useState(false);
   const [captureError, setCaptureError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const titleRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   useEffect(() => { titleRef.current?.focus(); }, []);
   const modes = [{ label: "Note" as const, icon: FileText }, { label: "Upload" as const, icon: UploadCloud }, { label: "Link" as const, icon: Link2 }, { label: "Voice" as const, icon: Mic }];
   const selectFile = (file: File | null) => {
@@ -55,6 +57,8 @@ export function CaptureModal({ onClose, onSave }: CaptureModalProps) {
     setSaving(true);
     try {
       await onSave({ title: title.trim() || selectedFile?.name || `${mode} memory`, content: mode === "Link" ? "" : body.trim(), kind: mode, sourceUrl: mode === "Link" ? body.trim() : undefined }, selectedFile ?? undefined);
+    } catch (error) {
+      setCaptureError(error instanceof Error ? error.message : "This memory could not be saved.");
     } finally {
       setSaving(false);
     }
@@ -63,13 +67,30 @@ export function CaptureModal({ onClose, onSave }: CaptureModalProps) {
   return (
     <motion.div className="modal-card capture-modal" initial={{ opacity: 0, scale: .96, y: 12 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: .97, y: 8 }} role="dialog" aria-modal="true">
       <div className="modal-header"><div><span className="card-kicker"><Plus size={14} /> Add to your brain</span><h2>Capture a memory</h2></div><button className="icon-button" onClick={onClose}><X size={19} /></button></div>
-      <div className="capture-tabs">{modes.map(({ label, icon: Icon }) => <button key={label} className={mode === label ? "active" : ""} onClick={() => setMode(label)}><Icon size={17} />{label}</button>)}</div>
+      <div className="capture-tabs">{modes.map(({ label, icon: Icon }) => <button type="button" key={label} className={mode === label ? "active" : ""} onClick={() => { setMode(label); setCaptureError(null); }}><Icon size={17} />{label}</button>)}</div>
       {mode === "Note" ? (
         <div className="note-form"><input ref={titleRef} value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Give this thought a title..." /><textarea value={body} onChange={(event) => setBody(event.target.value)} placeholder="Start typing. Neuron will organize, tag and connect it for you..." /><div className="ai-processing"><Sparkles size={15} /><span>Auto-summary, tags and connections are on</span></div></div>
       ) : mode === "Upload" ? (
-        <div className={`drop-zone ${selectedFile ? "has-file" : ""}`} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); selectFile(event.dataTransfer.files[0] ?? null); }}>
+        <div
+          className={`drop-zone upload-drop-zone ${selectedFile ? "has-file" : ""} ${dragActive ? "drag-active" : ""}`}
+          role={!selectedFile ? "button" : undefined}
+          tabIndex={!selectedFile ? 0 : undefined}
+          onClick={() => { if (!selectedFile) fileInputRef.current?.click(); }}
+          onKeyDown={(event) => { if (!selectedFile && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); fileInputRef.current?.click(); } }}
+          onDragEnter={(event) => { event.preventDefault(); setDragActive(true); }}
+          onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = "copy"; setDragActive(true); }}
+          onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDragActive(false); }}
+          onDrop={(event) => { event.preventDefault(); setDragActive(false); selectFile(event.dataTransfer.files[0] ?? null); }}
+        >
+          <input
+            ref={fileInputRef}
+            className="file-input"
+            type="file"
+            accept="image/jpeg,image/png,image/webp,.pdf,.jpg,.jpeg,.jfif,.png,.webp,.txt,.md,.markdown,.docx,.pptx,.xlsx,.mp3,.mpeg,.m4a,.mp4,.wav,.webm"
+            onChange={(event) => { selectFile(event.target.files?.[0] ?? null); event.currentTarget.value = ""; }}
+          />
           <span className="drop-icon"><UploadCloud /></span>
-          {selectedFile ? <><h3>{selectedFile.name}</h3><p>{formatFileSize(selectedFile.size)} · {selectedFile.type}</p><button onClick={() => selectFile(null)}>Choose another file</button></> : <><h3>Drop a private file here</h3><p>PDF, image, Office, text, or audio · up to 10 MB</p><label className="file-picker">Choose file<input type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.txt,.md,.markdown,.docx,.pptx,.xlsx,.mp3,.mpeg,.m4a,.mp4,.wav,.webm" onChange={(event) => selectFile(event.target.files?.[0] ?? null)} /></label></>}
+          {selectedFile ? <><h3>{selectedFile.name}</h3><p>{formatFileSize(selectedFile.size)} · {selectedFile.type || "Detected from extension"}</p><div className="file-actions"><button type="button" onClick={() => fileInputRef.current?.click()}>Browse another</button><button type="button" onClick={() => selectFile(null)}>Remove</button></div></> : <><h3>{dragActive ? "Drop the file now" : "Drop an image or file here"}</h3><p>Browse your Pictures or Documents folders · up to 10 MB</p><button type="button" className="file-picker" onClick={(event) => { event.stopPropagation(); fileInputRef.current?.click(); }}><UploadCloud size={15} /> Browse files</button><small>JPEG, PNG, WebP, PDF, Office, text, and audio</small></>}
         </div>
       ) : mode === "Link" ? (
         <div className="link-capture"><span className="drop-icon"><Link2 /></span><h3>Save a web memory</h3><p>Neuron will queue the page for extraction and enrichment.</p><input type="url" value={body} onChange={(event) => setBody(event.target.value)} placeholder="https://example.com/article" /><input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Optional title" /></div>

@@ -18,7 +18,7 @@ export const ALLOWED_UPLOAD_TYPES = new Set([
 
 const ALLOWED_EXTENSIONS_BY_TYPE: Record<string, string[]> = {
   "application/pdf": ["pdf"],
-  "image/jpeg": ["jpg", "jpeg"],
+  "image/jpeg": ["jpg", "jpeg", "jfif"],
   "image/png": ["png"],
   "image/webp": ["webp"],
   "text/plain": ["txt"],

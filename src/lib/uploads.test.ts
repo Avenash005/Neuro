@@ -4,6 +4,7 @@ import { formatFileSize, MAX_UPLOAD_BYTES, sanitizeFilename, validateUpload } fr
 describe("upload validation", () => {
   it("accepts a supported file within the size limit", () => {
     expect(() => validateUpload({ name: "notes.pdf", size: 1024, type: "application/pdf" })).not.toThrow();
+    expect(() => validateUpload({ name: "photo.jfif", size: 1024, type: "image/jpeg" })).not.toThrow();
   });
 
   it("rejects oversized and unsupported files", () => {
