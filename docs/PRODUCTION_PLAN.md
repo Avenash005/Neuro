@@ -95,15 +95,15 @@ stateDiagram-v2
 
 Goal: make the MVP safe and maintainable for real users.
 
-- [ ] Add email magic-link and Google/GitHub authentication
-- [ ] Support anonymous-to-permanent account linking
+- [x] Add email magic-link and Google/GitHub authentication UI
+- [x] Support anonymous-to-permanent account linking
 - [ ] Add route protection and session-aware profile UI
-- [ ] Split database changes into versioned migrations
-- [ ] Add generated database types
-- [ ] Add error boundaries and structured error messages
-- [ ] Add unit tests for data services and critical components
+- [x] Split database changes into versioned migrations
+- [x] Add generated-shape database types and regeneration guidance
+- [x] Add error boundaries and structured error messages
+- [x] Add unit tests for data services and critical components
 - [ ] Add integration tests for RLS policies
-- [ ] Add CI for type-check, tests, and build
+- [x] Add CI for type-check, tests, and build
 - [ ] Add staging and production environments
 - [ ] Add privacy policy, terms, account export, and account deletion
 
