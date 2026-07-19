@@ -6,6 +6,10 @@ const baseMemory = {
   title: "Test memory",
   content: "A useful idea",
   created_at: "2026-07-19T00:00:00.000Z",
+  storage_path: null,
+  original_filename: null,
+  mime_type: null,
+  file_size: null,
 };
 
 describe("normalizeMemory", () => {

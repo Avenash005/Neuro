@@ -10,6 +10,8 @@ Neuron is a personal knowledge workspace for capturing notes, links, files, and 
 - Permanent email account upgrades and returning-user magic-link sign-in
 - Google/GitHub identity-linking UI
 - Supabase-backed memory creation and listing
+- Private file uploads and owner-only downloads (PDF, image, Office, text, and audio up to 10 MB)
+- Durable URL capture with visible processing state and retry controls
 - Owner-only Row Level Security policies
 - Versioned SQL migrations and typed database access
 - Error boundary, unit tests, and GitHub Actions CI
@@ -18,13 +20,15 @@ Neuron is a personal knowledge workspace for capturing notes, links, files, and 
 
 The production roadmap is in [docs/PRODUCTION_PLAN.md](docs/PRODUCTION_PLAN.md).
 Phase 2A dashboard setup is in [docs/PHASE_2A_SETUP.md](docs/PHASE_2A_SETUP.md).
+Phase 2B capture setup is in [docs/PHASE_2B_SETUP.md](docs/PHASE_2B_SETUP.md).
 
 ## Branches
 
 | Branch | Purpose |
 | --- | --- |
 | `main` | Stable Phase 1 MVP baseline |
-| `phase-2-production` | Production architecture, real AI processing, storage, search, and authentication |
+| `phase-2-production` | Integration branch for production architecture and completed Phase 2 features |
+| `feature/universal-capture` | Phase 2B private uploads, ingestion jobs, and processing status |
 
 For future work, create focused branches from `phase-2-production`, such as `feature/file-upload`, `feature/semantic-search`, or `fix/mobile-capture`.
 
@@ -79,12 +83,12 @@ Keep real credentials in `.env.local`. Never place a service-role key in fronten
 ## Supabase setup
 
 1. Copy `.env.example` to `.env.local` and add the browser-safe publishable key.
-2. Run [supabase/schema.sql](supabase/schema.sql) in the Supabase SQL Editor.
+2. For a new project, run [supabase/schema.sql](supabase/schema.sql) in the Supabase SQL Editor. For an existing project, run only the new files in `supabase/migrations/`, in filename order.
 3. Enable **Authentication → Sign In / Providers → Anonymous Sign-Ins** for the MVP.
 4. Restart the development server.
 5. Confirm the header displays **Supabase synced**.
 
-Phase 2 should replace anonymous-only access with permanent email/OAuth accounts while retaining anonymous onboarding and account linking.
+The processing worker is the next Phase 2B slice. Uploaded files and links are stored durably and queued, but extraction, OCR, and transcription do not run until that worker is deployed.
 
 ## Quality checks
 
@@ -108,6 +112,7 @@ The command runs type-checking, unit tests, and the production build. It must pa
 - Change dashboard widgets: `src/features/dashboard/Dashboard.tsx`
 - Change Library, Collections, or Graph: `src/features/views/FeatureViews.tsx`
 - Change Supabase queries: `src/lib/supabase.ts`
+- Change upload validation: `src/lib/uploads.ts`
 - Change database schema or security policies: `supabase/schema.sql`
 - Change temporary demo content: `src/data/mockData.ts`
 - Change colors and layout: `src/index.css`

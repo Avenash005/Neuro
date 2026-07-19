@@ -3,11 +3,13 @@ import {
   ChevronDown,
   Code2,
   FileText,
+  Download,
   Globe2,
   Grid2X2,
   Link2,
   Mic,
   Plus,
+  RotateCw,
   Search,
   Sparkles,
   Star,
@@ -18,21 +20,28 @@ import type { ReactNode } from "react";
 import { collections, recentItems } from "../../data/mockData";
 import type { MemoryRecord } from "../../lib/supabase";
 import type { LibraryItem } from "../../types/app";
+import { formatFileSize } from "../../lib/uploads";
 
 type LibraryViewProps = {
   onSearch: (query: string) => void;
   openCapture: () => void;
   memories: MemoryRecord[];
+  onRetry: (memoryId: string) => Promise<void>;
+  onDownload: (path: string, filename: string) => Promise<void>;
 };
 
-export function LibraryView({ onSearch, openCapture, memories }: LibraryViewProps) {
+export function LibraryView({ onSearch, openCapture, memories, onRetry, onDownload }: LibraryViewProps) {
   const syncedItems: LibraryItem[] = memories.map((memory) => ({
+    id: memory.id,
     title: memory.title,
-    description: memory.content || `${memory.kind} captured in Neuron`,
-    meta: `${memory.kind} · ${memory.processing_status === "ready" ? "AI processed" : "Processing"}`,
+    description: memory.original_filename ? `${memory.original_filename} · ${memory.file_size ? formatFileSize(memory.file_size) : "Private file"}` : memory.content || `${memory.kind} captured in Neuron`,
+    meta: `${memory.kind} · ${memory.processing_status === "ready" ? "AI processed" : memory.processing_status === "failed" ? "Processing failed" : "Queued for processing"}`,
     tag: "Synced",
     icon: memory.kind === "Voice" ? Mic : memory.kind === "Link" ? Link2 : memory.kind === "Upload" ? UploadCloud : FileText,
     color: memory.kind === "Voice" ? "orange" : memory.kind === "Link" ? "green" : "violet",
+    processingStatus: memory.processing_status,
+    storagePath: memory.storage_path ?? undefined,
+    originalFilename: memory.original_filename ?? undefined,
   }));
   const allItems = [
     ...syncedItems,
@@ -51,7 +60,7 @@ export function LibraryView({ onSearch, openCapture, memories }: LibraryViewProp
       <div className="library-list">
         {allItems.map((item, index) => {
           const Icon = item.icon;
-          return <article key={`${item.title}-${index}`} className="library-row"><span className={`file-icon ${item.color}`}><Icon size={19} /></span><div><span>{item.tag}</span><h3>{item.title}</h3><p>{item.description}</p></div><small>{index + 1}d ago</small><button><Star size={16} /></button></article>;
+          return <article key={`${item.title}-${index}`} className="library-row"><span className={`file-icon ${item.color}`}><Icon size={19} /></span><div><span>{item.tag}</span><h3>{item.title}</h3><p>{item.description}</p></div><small>{item.meta}</small>{item.processingStatus === "failed" && item.id ? <button title="Retry processing" onClick={() => void onRetry(item.id!)}><RotateCw size={16} /></button> : item.storagePath && item.originalFilename ? <button title="Download private file" onClick={() => void onDownload(item.storagePath!, item.originalFilename!)}><Download size={16} /></button> : <button><Star size={16} /></button>}</article>;
         })}
       </div>
     </main>
