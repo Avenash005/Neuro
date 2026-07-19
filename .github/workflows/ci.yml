@@ -26,5 +26,13 @@ jobs:
       - name: Install locked dependencies
         run: npm ci
 
+      - name: Set up Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
       - name: Type-check, test, and build
         run: npm run check
+
+      - name: Check processing worker
+        run: npm run check:worker

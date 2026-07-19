@@ -34,7 +34,7 @@ export function LibraryView({ onSearch, openCapture, memories, onRetry, onDownlo
   const syncedItems: LibraryItem[] = memories.map((memory) => ({
     id: memory.id,
     title: memory.title,
-    description: memory.original_filename ? `${memory.original_filename} · ${memory.file_size ? formatFileSize(memory.file_size) : "Private file"}` : memory.content || `${memory.kind} captured in Neuron`,
+    description: memory.summary || memory.content || memory.extracted_text?.slice(0, 180) || (memory.original_filename ? `${memory.original_filename} · ${memory.file_size ? formatFileSize(memory.file_size) : "Private file"}` : `${memory.kind} captured in Neuron`),
     meta: `${memory.kind} · ${memory.processing_status === "ready" ? "AI processed" : memory.processing_status === "failed" ? "Processing failed" : "Queued for processing"}`,
     tag: "Synced",
     icon: memory.kind === "Voice" ? Mic : memory.kind === "Link" ? Link2 : memory.kind === "Upload" ? UploadCloud : FileText,

@@ -12,6 +12,8 @@ Neuron is a personal knowledge workspace for capturing notes, links, files, and 
 - Supabase-backed memory creation and listing
 - Private file uploads and owner-only downloads (PDF, image, Office, text, and audio up to 10 MB)
 - Durable URL capture with visible processing state and retry controls
+- Server-side extraction worker for URLs, images/OCR, PDFs, Office files, text, and audio
+- AI summaries and tags stored separately from original source files
 - Owner-only Row Level Security policies
 - Versioned SQL migrations and typed database access
 - Error boundary, unit tests, and GitHub Actions CI
@@ -21,6 +23,7 @@ Neuron is a personal knowledge workspace for capturing notes, links, files, and 
 The production roadmap is in [docs/PRODUCTION_PLAN.md](docs/PRODUCTION_PLAN.md).
 Phase 2A dashboard setup is in [docs/PHASE_2A_SETUP.md](docs/PHASE_2A_SETUP.md).
 Phase 2B capture setup is in [docs/PHASE_2B_SETUP.md](docs/PHASE_2B_SETUP.md).
+Phase 2B worker deployment is in [docs/PHASE_2B_WORKER.md](docs/PHASE_2B_WORKER.md).
 
 ## Branches
 
@@ -88,7 +91,7 @@ Keep real credentials in `.env.local`. Never place a service-role key in fronten
 4. Restart the development server.
 5. Confirm the header displays **Supabase synced**.
 
-The processing worker is the next Phase 2B slice. Uploaded files and links are stored durably and queued, but extraction, OCR, and transcription do not run until that worker is deployed.
+After applying the capture migration, deploy the processing worker using [docs/PHASE_2B_WORKER.md](docs/PHASE_2B_WORKER.md). Until its migration, secrets, and Edge Function are deployed, new files remain safely queued.
 
 ## Quality checks
 
@@ -101,9 +104,10 @@ Or run the complete local/CI gate:
 
 ```bash
 npm run check
+npm run check:worker
 ```
 
-The command runs type-checking, unit tests, and the production build. It must pass before merging a branch.
+These commands run frontend type-checking, unit tests, the production build, and Deno validation for the Edge Function. They must pass before merging a branch.
 
 ## Editing guide
 
@@ -114,6 +118,7 @@ The command runs type-checking, unit tests, and the production build. It must pa
 - Change Supabase queries: `src/lib/supabase.ts`
 - Change upload validation: `src/lib/uploads.ts`
 - Change database schema or security policies: `supabase/schema.sql`
+- Change ingestion/AI processing: `supabase/functions/process-memory/index.ts`
 - Change temporary demo content: `src/data/mockData.ts`
 - Change colors and layout: `src/index.css`
 

@@ -1,0 +1,6 @@
+project_id = "wanonpqnfdhyvyjfrtrf"
+
+[functions.process-memory]
+# Authentication is verified inside the function so it can support both
+# signed-in user invocations and a separate scheduled-worker secret.
+verify_jwt = false
