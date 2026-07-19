@@ -10,6 +10,9 @@ const baseMemory = {
   original_filename: null,
   mime_type: null,
   file_size: null,
+  summary: null,
+  extracted_text: null,
+  extracted_at: null,
 };
 
 describe("normalizeMemory", () => {

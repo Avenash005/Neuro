@@ -122,13 +122,13 @@ Goal: replace capture placeholders with durable ingestion.
 - [x] Create a private object-storage bucket with owner-only policies
 - [ ] Add signed upload URLs and upload progress
 - [x] Add MIME, extension, and size validation
-- [ ] Add note, URL, PDF, image, audio, and document processors
+- [x] Add URL, PDF, image, audio, text, and Office document processors
 - [x] Add processing-state UI with retry controls
-- [ ] Store extracted text separately from original files
+- [x] Store extracted text separately from original files
 - [ ] Add idempotency and duplicate detection
 - [ ] Add deletion cascades for source files and derived artifacts
 
-Current Phase 2B foundation: browser uploads are stored privately, URL captures are durable, ingestion jobs are created automatically, and failed jobs can be requeued. The server-side worker that performs extraction, OCR, transcription, and URL fetching is the next delivery slice.
+Current Phase 2B foundation: browser uploads are stored privately, ingestion jobs are claimed atomically, the Edge Function performs extraction/OCR/transcription/URL fetching, and results are saved as extracted text, summaries, and tags. Deployment, end-to-end provider validation, duplicate detection, and deletion cascades remain.
 
 Exit criteria:
 

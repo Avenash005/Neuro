@@ -15,6 +15,7 @@ import {
   isSupabaseConfigured,
   listMemories,
   onAuthChange,
+  processMemoryNow,
   retryMemoryProcessing,
   type MemoryInput,
   type MemoryRecord,
@@ -91,8 +92,24 @@ export default function App() {
       await retryMemoryProcessing(memoryId);
       setSyncedMemories((current) => current.map((memory) => memory.id === memoryId ? { ...memory, processing_status: "pending" } : memory));
       showToast("Processing queued again");
+      await processSavedMemory(memoryId);
     } catch (error) {
       showToast(error instanceof Error ? error.message : "Could not retry processing");
+    }
+  }
+
+  async function processSavedMemory(memoryId: string) {
+    setSyncedMemories((current) => current.map((memory) => memory.id === memoryId ? { ...memory, processing_status: "processing" } : memory));
+    try {
+      const result = await processMemoryNow(memoryId);
+      const memories = await listMemories();
+      setSyncedMemories(memories);
+      if (result?.status === "completed") showToast("AI processing complete");
+      else if (result?.status === "retry_queued") showToast("Processing will retry automatically");
+    } catch (error) {
+      const memories = await listMemories().catch(() => null);
+      if (memories) setSyncedMemories(memories);
+      showToast(error instanceof Error ? error.message : "AI processing is unavailable");
     }
   }
 
@@ -116,6 +133,7 @@ export default function App() {
       setCaptureOpen(false);
       setBackendStatus("connected");
       showToast(file ? `“${memory.title}” uploaded privately and queued` : `“${memory.title}” is synced to Supabase`);
+      if (savedMemory.kind !== "Note") void processSavedMemory(savedMemory.id);
     } catch (error) {
       setBackendStatus("error");
       const message = error instanceof Error ? error.message : "Unknown Supabase error";

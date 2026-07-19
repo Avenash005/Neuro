@@ -20,6 +20,8 @@ export type Database = {
           original_filename: string | null;
           mime_type: string | null;
           file_size: number | null;
+          extracted_text: string | null;
+          extracted_at: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -39,6 +41,8 @@ export type Database = {
           original_filename?: string | null;
           mime_type?: string | null;
           file_size?: number | null;
+          extracted_text?: string | null;
+          extracted_at?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -58,6 +62,8 @@ export type Database = {
           original_filename?: string | null;
           mime_type?: string | null;
           file_size?: number | null;
+          extracted_text?: string | null;
+          extracted_at?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -128,6 +134,22 @@ export type Database = {
       request_processing_retry: {
         Args: { target_memory_id: string };
         Returns: undefined;
+      };
+      claim_processing_jobs: {
+        Args: { batch_limit?: number; target_memory_id?: string | null; target_user_id?: string | null };
+        Returns: Database["public"]["Tables"]["processing_jobs"]["Row"][];
+      };
+      complete_processing_job: {
+        Args: { target_job_id: string; result_text: string; result_summary: string; result_tags: string[]; result_metadata?: Json };
+        Returns: undefined;
+      };
+      fail_processing_job: {
+        Args: { target_job_id: string; failure_message: string; terminal?: boolean };
+        Returns: undefined;
+      };
+      recover_stale_processing_jobs: {
+        Args: Record<string, never>;
+        Returns: number;
       };
     };
     Enums: Record<string, never>;

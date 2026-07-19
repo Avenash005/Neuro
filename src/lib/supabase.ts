@@ -19,6 +19,9 @@ export type MemoryRecord = MemoryInput & {
   original_filename: string | null;
   mime_type: string | null;
   file_size: number | null;
+  summary: string | null;
+  extracted_text: string | null;
+  extracted_at: string | null;
 };
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.trim();
@@ -114,7 +117,7 @@ export async function createMemory(input: MemoryInput) {
       processing_status: "pending",
       source_url: input.sourceUrl ?? null,
     })
-    .select("id, title, content, kind, processing_status, created_at, storage_path, original_filename, mime_type, file_size")
+    .select("id, title, content, kind, processing_status, created_at, storage_path, original_filename, mime_type, file_size, summary, extracted_text, extracted_at")
     .single();
 
   if (error) throw error;
@@ -126,7 +129,7 @@ export async function listMemories(): Promise<MemoryRecord[]> {
   await ensureUser();
   const { data, error } = await supabase
     .from("memories")
-    .select("id, title, content, kind, processing_status, created_at, storage_path, original_filename, mime_type, file_size")
+    .select("id, title, content, kind, processing_status, created_at, storage_path, original_filename, mime_type, file_size, summary, extracted_text, extracted_at")
     .order("created_at", { ascending: false })
     .limit(50);
 
@@ -162,7 +165,7 @@ export async function createFileMemory(file: File, title: string) {
       mime_type: file.type,
       file_size: file.size,
     })
-    .select("id, title, content, kind, processing_status, created_at, storage_path, original_filename, mime_type, file_size")
+    .select("id, title, content, kind, processing_status, created_at, storage_path, original_filename, mime_type, file_size, summary, extracted_text, extracted_at")
     .single();
 
   if (error) {
@@ -176,6 +179,15 @@ export async function retryMemoryProcessing(memoryId: string) {
   if (!supabase) throw new Error("Supabase is not configured.");
   const { error } = await supabase.rpc("request_processing_retry", { target_memory_id: memoryId });
   if (error) throw error;
+}
+
+export async function processMemoryNow(memoryId: string) {
+  if (!supabase) throw new Error("Supabase is not configured.");
+  const { data, error } = await supabase.functions.invoke("process-memory", { body: { memoryId } });
+  if (error) throw error;
+  const result = data?.results?.[0] as { status?: string; error?: string } | undefined;
+  if (result?.status === "failed") throw new Error(result.error || "AI processing failed.");
+  return result;
 }
 
 export async function downloadMemoryFile(path: string, filename: string) {
@@ -193,7 +205,7 @@ export async function downloadMemoryFile(path: string, filename: string) {
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-type MemoryRow = Pick<Database["public"]["Tables"]["memories"]["Row"], "id" | "title" | "content" | "kind" | "processing_status" | "created_at" | "storage_path" | "original_filename" | "mime_type" | "file_size">;
+type MemoryRow = Pick<Database["public"]["Tables"]["memories"]["Row"], "id" | "title" | "content" | "kind" | "processing_status" | "created_at" | "storage_path" | "original_filename" | "mime_type" | "file_size" | "summary" | "extracted_text" | "extracted_at">;
 
 export function normalizeMemory(memory: MemoryRow): MemoryRecord {
   const normalizedKind = `${memory.kind.charAt(0).toUpperCase()}${memory.kind.slice(1)}`;
@@ -214,5 +226,8 @@ export function normalizeMemory(memory: MemoryRow): MemoryRecord {
     original_filename: memory.original_filename,
     mime_type: memory.mime_type,
     file_size: memory.file_size,
+    summary: memory.summary,
+    extracted_text: memory.extracted_text,
+    extracted_at: memory.extracted_at,
   };
 }

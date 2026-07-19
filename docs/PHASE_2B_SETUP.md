@@ -33,7 +33,7 @@ The database automatically creates one queued job per captured source:
 | PDF, Office, or text file | `extract` |
 | Link | `fetch_url` |
 
-Jobs remain queued until the Phase 2B processing worker is deployed. The UI already exposes queued/failed states and a retry action; it does not claim that extraction is complete.
+Jobs remain queued until the Phase 2B processing worker is deployed. Continue with [PHASE_2B_WORKER.md](PHASE_2B_WORKER.md). The UI exposes queued/processing/failed states and a retry action.
 
 ## Security model
 
