@@ -1,4 +1,4 @@
-import { blockedHostname, htmlToText, localExtraction, validatedExternalUrl } from "./index.ts";
+import { blockedHostname, handleRequest, htmlToText, localExtraction, validatedExternalUrl } from "./index.ts";
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
@@ -28,4 +28,11 @@ Deno.test("provides a deterministic local extraction fallback", () => {
   assert(result.extracted_text === "A useful idea.\n\nWith context.", "source text should be preserved");
   assert(result.summary === "A useful idea. With context.", "summary should normalize whitespace");
   assert(result.provider === "local", "fallback provider should be local");
+});
+
+Deno.test("allows the Supabase client header during browser preflight", async () => {
+  const response = await handleRequest(new Request("https://example.com/process-memory", { method: "OPTIONS" }));
+  const allowedHeaders = response.headers.get("Access-Control-Allow-Headers") || "";
+  assert(response.status === 200, "preflight should succeed");
+  assert(allowedHeaders.includes("x-client-info"), "Supabase client header should be allowed");
 });
