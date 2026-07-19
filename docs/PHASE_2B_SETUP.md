@@ -33,7 +33,7 @@ The database automatically creates one queued job per captured source:
 | PDF, Office, or text file | `extract` |
 | Link | `fetch_url` |
 
-Jobs remain queued until the Phase 2B processing worker is deployed. Continue with [PHASE_2B_WORKER.md](PHASE_2B_WORKER.md). The UI exposes queued/processing/failed states and a retry action.
+Jobs remain queued until the Phase 2B processing worker is deployed. Continue with [PHASE_2B_WORKER.md](PHASE_2B_WORKER.md). The UI exposes queued/processing/failed states, retry controls, private downloads, readable memory details, and confirmed permanent deletion.
 
 ## Security model
 
@@ -41,4 +41,5 @@ Jobs remain queued until the Phase 2B processing worker is deployed. Continue wi
 - Object paths begin with the authenticated user's ID.
 - Storage RLS permits users to insert, read, and delete only their own objects.
 - Memory rows and processing status remain protected by database RLS.
+- Permanent deletion removes the private source object before deleting the memory; the memory foreign-key cascade removes its processing jobs.
 - Validation runs in the browser and is repeated by the bucket's MIME and size constraints. A later worker must still treat all content as untrusted and perform malware/content inspection.

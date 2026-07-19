@@ -13,6 +13,7 @@ import {
   Search,
   Sparkles,
   Star,
+  Trash2,
   UploadCloud,
   X,
 } from "lucide-react";
@@ -28,6 +29,7 @@ type LibraryViewProps = {
   memories: MemoryRecord[];
   onRetry: (memoryId: string) => Promise<void>;
   onDownload: (path: string, filename: string) => Promise<void>;
+  onDelete: (memory: MemoryRecord) => Promise<void>;
 };
 
 type LibrarySelection = {
@@ -35,7 +37,7 @@ type LibrarySelection = {
   memory?: MemoryRecord;
 };
 
-export function LibraryView({ onSearch, openCapture, memories, onRetry, onDownload }: LibraryViewProps) {
+export function LibraryView({ onSearch, openCapture, memories, onRetry, onDownload, onDelete }: LibraryViewProps) {
   const [selection, setSelection] = useState<LibrarySelection | null>(null);
   const syncedItems: LibraryItem[] = memories.map((memory) => ({
     id: memory.id,
@@ -94,17 +96,20 @@ export function LibraryView({ onSearch, openCapture, memories, onRetry, onDownlo
         })}
       </div>
     </main>
-    {selection && <MemoryDetail selection={selection} onClose={() => setSelection(null)} onRetry={onRetry} onDownload={onDownload} />}
+    {selection && <MemoryDetail selection={selection} onClose={() => setSelection(null)} onRetry={onRetry} onDownload={onDownload} onDelete={onDelete} />}
     </>
   );
 }
 
-function MemoryDetail({ selection, onClose, onRetry, onDownload }: {
+function MemoryDetail({ selection, onClose, onRetry, onDownload, onDelete }: {
   selection: LibrarySelection;
   onClose: () => void;
   onRetry: (memoryId: string) => Promise<void>;
   onDownload: (path: string, filename: string) => Promise<void>;
+  onDelete: (memory: MemoryRecord) => Promise<void>;
 }) {
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const { item, memory } = selection;
   const content = memory?.content.trim() || memory?.extracted_text?.trim() || item.description;
   const separateExtraction = Boolean(
@@ -115,6 +120,17 @@ function MemoryDetail({ selection, onClose, onRetry, onDownload }: {
   const created = memory
     ? new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(new Date(memory.created_at))
     : null;
+
+  const permanentlyDelete = async () => {
+    if (!memory || deleting) return;
+    setDeleting(true);
+    try {
+      await onDelete(memory);
+      onClose();
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   return (
     <div className="modal-layer" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
@@ -138,7 +154,9 @@ function MemoryDetail({ selection, onClose, onRetry, onDownload }: {
           <div>
             {memory?.processing_status === "failed" && <button className="cancel" onClick={() => void onRetry(memory.id)}><RotateCw size={14} /> Retry processing</button>}
             {memory?.storage_path && memory.original_filename && <button className="save" onClick={() => void onDownload(memory.storage_path!, memory.original_filename!)}><Download size={14} /> Download</button>}
-            <button className="cancel" onClick={onClose}>Close</button>
+            {memory && !confirmingDelete && <button className="danger" onClick={() => setConfirmingDelete(true)}><Trash2 size={14} /> Delete</button>}
+            {memory && confirmingDelete && <><button className="cancel" disabled={deleting} onClick={() => setConfirmingDelete(false)}>Keep memory</button><button className="danger" disabled={deleting} onClick={() => void permanentlyDelete()}><Trash2 size={14} /> {deleting ? "Deleting…" : "Delete permanently"}</button></>}
+            {!confirmingDelete && <button className="cancel" onClick={onClose}>Close</button>}
           </div>
         </div>
       </section>
