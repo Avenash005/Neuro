@@ -14,24 +14,47 @@ import {
 import { useEffect, useRef, useState } from "react";
 import { searchResults } from "../../data/mockData";
 import type { MemoryInput } from "../../lib/supabase";
+import { formatFileSize, validateUpload } from "../../lib/uploads";
 
 type CaptureModalProps = {
   onClose: () => void;
-  onSave: (memory: MemoryInput) => Promise<void>;
+  onSave: (memory: MemoryInput, file?: File) => Promise<void>;
 };
 
 export function CaptureModal({ onClose, onSave }: CaptureModalProps) {
   const [mode, setMode] = useState<MemoryInput["kind"]>("Note");
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [captureError, setCaptureError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const titleRef = useRef<HTMLInputElement>(null);
   useEffect(() => { titleRef.current?.focus(); }, []);
   const modes = [{ label: "Note" as const, icon: FileText }, { label: "Upload" as const, icon: UploadCloud }, { label: "Link" as const, icon: Link2 }, { label: "Voice" as const, icon: Mic }];
+  const selectFile = (file: File | null) => {
+    setCaptureError(null);
+    if (!file) return setSelectedFile(null);
+    try {
+      validateUpload(file);
+      setSelectedFile(file);
+      if (!title) setTitle(file.name.replace(/\.[^.]+$/, ""));
+    } catch (error) {
+      setSelectedFile(null);
+      setCaptureError(error instanceof Error ? error.message : "This file cannot be uploaded.");
+    }
+  };
   const save = async () => {
+    setCaptureError(null);
+    if (mode === "Upload" && !selectedFile) return setCaptureError("Choose a file before saving this memory.");
+    if (mode === "Link") {
+      try {
+        const url = new URL(body);
+        if (!["http:", "https:"].includes(url.protocol)) throw new Error("Unsupported URL protocol");
+      } catch { return setCaptureError("Enter a complete URL beginning with http:// or https://."); }
+    }
     setSaving(true);
     try {
-      await onSave({ title: title.trim() || `${mode} memory`, content: body.trim(), kind: mode });
+      await onSave({ title: title.trim() || selectedFile?.name || `${mode} memory`, content: mode === "Link" ? "" : body.trim(), kind: mode, sourceUrl: mode === "Link" ? body.trim() : undefined }, selectedFile ?? undefined);
     } finally {
       setSaving(false);
     }
@@ -43,9 +66,17 @@ export function CaptureModal({ onClose, onSave }: CaptureModalProps) {
       <div className="capture-tabs">{modes.map(({ label, icon: Icon }) => <button key={label} className={mode === label ? "active" : ""} onClick={() => setMode(label)}><Icon size={17} />{label}</button>)}</div>
       {mode === "Note" ? (
         <div className="note-form"><input ref={titleRef} value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Give this thought a title..." /><textarea value={body} onChange={(event) => setBody(event.target.value)} placeholder="Start typing. Neuron will organize, tag and connect it for you..." /><div className="ai-processing"><Sparkles size={15} /><span>Auto-summary, tags and connections are on</span></div></div>
+      ) : mode === "Upload" ? (
+        <div className={`drop-zone ${selectedFile ? "has-file" : ""}`} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); selectFile(event.dataTransfer.files[0] ?? null); }}>
+          <span className="drop-icon"><UploadCloud /></span>
+          {selectedFile ? <><h3>{selectedFile.name}</h3><p>{formatFileSize(selectedFile.size)} · {selectedFile.type}</p><button onClick={() => selectFile(null)}>Choose another file</button></> : <><h3>Drop a private file here</h3><p>PDF, image, Office, text, or audio · up to 10 MB</p><label className="file-picker">Choose file<input type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.txt,.md,.markdown,.docx,.pptx,.xlsx,.mp3,.mpeg,.m4a,.mp4,.wav,.webm" onChange={(event) => selectFile(event.target.files?.[0] ?? null)} /></label></>}
+        </div>
+      ) : mode === "Link" ? (
+        <div className="link-capture"><span className="drop-icon"><Link2 /></span><h3>Save a web memory</h3><p>Neuron will queue the page for extraction and enrichment.</p><input type="url" value={body} onChange={(event) => setBody(event.target.value)} placeholder="https://example.com/article" /><input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Optional title" /></div>
       ) : (
-        <div className="drop-zone"><span className="drop-icon">{mode === "Upload" ? <UploadCloud /> : mode === "Voice" ? <Mic /> : <Link2 />}</span><h3>{mode === "Upload" ? "Drop anything here" : mode === "Voice" ? "Record a thought" : "Paste a link to remember"}</h3><p>{mode === "Upload" ? "PDFs, images, audio, video, docs and more" : "Neuron will process and connect it automatically"}</p><button>{mode === "Voice" ? "Start recording" : mode === "Link" ? "Paste from clipboard" : "Choose files"}</button></div>
+        <div className="drop-zone"><span className="drop-icon"><Mic /></span><h3>Voice recording is next</h3><p>Audio file uploads work now. Live microphone capture arrives with the processing worker.</p><button onClick={() => setMode("Upload")}>Upload audio instead</button></div>
       )}
+      {captureError && <div className="capture-error"><X size={15} />{captureError}</div>}
       <div className="modal-footer"><span><Command size={12} /> Enter to save</span><div><button className="cancel" onClick={onClose} disabled={saving}>Cancel</button><button className="save" onClick={save} disabled={saving}>{saving ? "Saving…" : "Save memory"} <ArrowRight size={15} /></button></div></div>
     </motion.div>
   );

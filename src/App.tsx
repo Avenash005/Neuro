@@ -9,10 +9,13 @@ import { Dashboard } from "./features/dashboard/Dashboard";
 import { CollectionsView, GraphView, LibraryView } from "./features/views/FeatureViews";
 import {
   connectSupabase,
+  createFileMemory,
   createMemory,
+  downloadMemoryFile,
   isSupabaseConfigured,
   listMemories,
   onAuthChange,
+  retryMemoryProcessing,
   type MemoryInput,
   type MemoryRecord,
 } from "./lib/supabase";
@@ -36,7 +39,7 @@ export default function App() {
   const openCapture = () => setCaptureOpen(true);
 
   const content = useMemo(() => {
-    if (activeView === "Library") return <LibraryView onSearch={search} openCapture={openCapture} memories={syncedMemories} />;
+    if (activeView === "Library") return <LibraryView onSearch={search} openCapture={openCapture} memories={syncedMemories} onRetry={retryProcessing} onDownload={downloadFile} />;
     if (activeView === "Collections") return <CollectionsView />;
     if (activeView === "Graph") return <GraphView />;
     return <Dashboard onSearch={search} openCapture={openCapture} openAssistant={() => setAssistantOpen(true)} />;
@@ -83,17 +86,36 @@ export default function App() {
     window.setTimeout(() => setToast(null), 3600);
   };
 
-  const saveMemory = async (memory: MemoryInput) => {
+  async function retryProcessing(memoryId: string) {
+    try {
+      await retryMemoryProcessing(memoryId);
+      setSyncedMemories((current) => current.map((memory) => memory.id === memoryId ? { ...memory, processing_status: "pending" } : memory));
+      showToast("Processing queued again");
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Could not retry processing");
+    }
+  }
+
+  async function downloadFile(path: string, filename: string) {
+    try {
+      await downloadMemoryFile(path, filename);
+      showToast(`Downloading “${filename}”`);
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Could not download this file");
+    }
+  }
+
+  const saveMemory = async (memory: MemoryInput, file?: File) => {
     if (!isSupabaseConfigured) {
       showToast("Add your Supabase key to .env.local to save memories");
       return;
     }
     try {
-      const savedMemory = await createMemory(memory);
+      const savedMemory = file ? await createFileMemory(file, memory.title) : await createMemory(memory);
       setSyncedMemories((current) => [savedMemory, ...current]);
       setCaptureOpen(false);
       setBackendStatus("connected");
-      showToast(`“${memory.title}” is synced to Supabase`);
+      showToast(file ? `“${memory.title}” uploaded privately and queued` : `“${memory.title}” is synced to Supabase`);
     } catch (error) {
       setBackendStatus("error");
       const message = error instanceof Error ? error.message : "Unknown Supabase error";

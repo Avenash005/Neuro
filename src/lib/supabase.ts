@@ -1,5 +1,6 @@
 import { createClient, type Provider, type User } from "@supabase/supabase-js";
 import type { Database } from "../types/database";
+import { sanitizeFilename, validateUpload } from "./uploads";
 
 export type MemoryKind = "Note" | "Upload" | "Link" | "Voice";
 
@@ -7,12 +8,17 @@ export type MemoryInput = {
   title: string;
   content: string;
   kind: MemoryKind;
+  sourceUrl?: string;
 };
 
 export type MemoryRecord = MemoryInput & {
   id: string;
   created_at: string;
   processing_status: "pending" | "processing" | "ready" | "failed";
+  storage_path: string | null;
+  original_filename: string | null;
+  mime_type: string | null;
+  file_size: number | null;
 };
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.trim();
@@ -106,8 +112,9 @@ export async function createMemory(input: MemoryInput) {
       content: input.content,
       kind: input.kind.toLowerCase(),
       processing_status: "pending",
+      source_url: input.sourceUrl ?? null,
     })
-    .select("id, title, content, kind, processing_status, created_at")
+    .select("id, title, content, kind, processing_status, created_at, storage_path, original_filename, mime_type, file_size")
     .single();
 
   if (error) throw error;
@@ -119,7 +126,7 @@ export async function listMemories(): Promise<MemoryRecord[]> {
   await ensureUser();
   const { data, error } = await supabase
     .from("memories")
-    .select("id, title, content, kind, processing_status, created_at")
+    .select("id, title, content, kind, processing_status, created_at, storage_path, original_filename, mime_type, file_size")
     .order("created_at", { ascending: false })
     .limit(50);
 
@@ -127,7 +134,66 @@ export async function listMemories(): Promise<MemoryRecord[]> {
   return data.map(normalizeMemory);
 }
 
-type MemoryRow = Pick<Database["public"]["Tables"]["memories"]["Row"], "id" | "title" | "content" | "kind" | "processing_status" | "created_at">;
+export async function createFileMemory(file: File, title: string) {
+  if (!supabase) throw new Error("Supabase is not configured.");
+  validateUpload(file);
+  const user = await ensureUser();
+  const path = `${user.id}/${crypto.randomUUID()}-${sanitizeFilename(file.name)}`;
+  const bucket = "memory-files";
+
+  const { error: uploadError } = await supabase.storage.from(bucket).upload(path, file, {
+    cacheControl: "3600",
+    contentType: file.type,
+    upsert: false,
+  });
+  if (uploadError) throw uploadError;
+
+  const { data, error } = await supabase
+    .from("memories")
+    .insert({
+      user_id: user.id,
+      title,
+      content: "",
+      kind: "upload",
+      processing_status: "pending",
+      storage_bucket: bucket,
+      storage_path: path,
+      original_filename: file.name,
+      mime_type: file.type,
+      file_size: file.size,
+    })
+    .select("id, title, content, kind, processing_status, created_at, storage_path, original_filename, mime_type, file_size")
+    .single();
+
+  if (error) {
+    await supabase.storage.from(bucket).remove([path]);
+    throw error;
+  }
+  return normalizeMemory(data);
+}
+
+export async function retryMemoryProcessing(memoryId: string) {
+  if (!supabase) throw new Error("Supabase is not configured.");
+  const { error } = await supabase.rpc("request_processing_retry", { target_memory_id: memoryId });
+  if (error) throw error;
+}
+
+export async function downloadMemoryFile(path: string, filename: string) {
+  if (!supabase) throw new Error("Supabase is not configured.");
+  const { data, error } = await supabase.storage.from("memory-files").download(path);
+  if (error) throw error;
+  const url = URL.createObjectURL(data);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.style.display = "none";
+  document.body.append(anchor);
+  anchor.click();
+  anchor.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+type MemoryRow = Pick<Database["public"]["Tables"]["memories"]["Row"], "id" | "title" | "content" | "kind" | "processing_status" | "created_at" | "storage_path" | "original_filename" | "mime_type" | "file_size">;
 
 export function normalizeMemory(memory: MemoryRow): MemoryRecord {
   const normalizedKind = `${memory.kind.charAt(0).toUpperCase()}${memory.kind.slice(1)}`;
@@ -144,5 +210,9 @@ export function normalizeMemory(memory: MemoryRow): MemoryRecord {
     kind,
     processing_status: processingStatus,
     created_at: memory.created_at,
+    storage_path: memory.storage_path,
+    original_filename: memory.original_filename,
+    mime_type: memory.mime_type,
+    file_size: memory.file_size,
   };
 }

@@ -119,14 +119,16 @@ Exit criteria:
 
 Goal: replace capture placeholders with durable ingestion.
 
-- [ ] Create private object-storage buckets
+- [x] Create a private object-storage bucket with owner-only policies
 - [ ] Add signed upload URLs and upload progress
-- [ ] Add MIME, extension, and size validation
+- [x] Add MIME, extension, and size validation
 - [ ] Add note, URL, PDF, image, audio, and document processors
-- [ ] Add processing-state UI with retry controls
+- [x] Add processing-state UI with retry controls
 - [ ] Store extracted text separately from original files
 - [ ] Add idempotency and duplicate detection
 - [ ] Add deletion cascades for source files and derived artifacts
+
+Current Phase 2B foundation: browser uploads are stored privately, URL captures are durable, ingestion jobs are created automatically, and failed jobs can be requeued. The server-side worker that performs extraction, OCR, transcription, and URL fetching is the next delivery slice.
 
 Exit criteria:
 
