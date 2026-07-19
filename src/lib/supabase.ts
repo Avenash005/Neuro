@@ -1,5 +1,6 @@
 import { createClient, type Provider, type User } from "@supabase/supabase-js";
 import type { Database } from "../types/database";
+import { runMemoryDeletion } from "./memoryDeletion";
 import { sanitizeFilename, validateUpload } from "./uploads";
 
 export type MemoryKind = "Note" | "Upload" | "Link" | "Voice";
@@ -203,6 +204,21 @@ export async function downloadMemoryFile(path: string, filename: string) {
   anchor.click();
   anchor.remove();
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+export async function deleteMemory(memoryId: string, storagePath: string | null) {
+  if (!supabase) throw new Error("Supabase is not configured.");
+  await ensureUser();
+  await runMemoryDeletion({
+    removeFile: async (path) => {
+      const { error } = await supabase.storage.from("memory-files").remove([path]);
+      if (error) throw new Error(error.message);
+    },
+    deleteRow: async (id) => {
+      const { error } = await supabase.from("memories").delete().eq("id", id);
+      if (error) throw new Error(error.message);
+    },
+  }, memoryId, storagePath);
 }
 
 type MemoryRow = Pick<Database["public"]["Tables"]["memories"]["Row"], "id" | "title" | "content" | "kind" | "processing_status" | "created_at" | "storage_path" | "original_filename" | "mime_type" | "file_size" | "summary" | "extracted_text" | "extracted_at">;

@@ -126,9 +126,9 @@ Goal: replace capture placeholders with durable ingestion.
 - [x] Add processing-state UI with retry controls
 - [x] Store extracted text separately from original files
 - [ ] Add idempotency and duplicate detection
-- [ ] Add deletion cascades for source files and derived artifacts
+- [x] Add deletion cascades for source files and derived artifacts
 
-Current Phase 2B foundation: browser uploads are stored privately, ingestion jobs are claimed atomically, the Edge Function performs extraction/OCR/transcription/URL fetching, and results are saved as extracted text, summaries, and tags. Deployment, end-to-end provider validation, duplicate detection, and deletion cascades remain.
+Current Phase 2B foundation: browser uploads are stored privately, ingestion jobs are claimed atomically, the deployed Edge Function performs extraction/OCR/transcription/URL fetching, and results are saved as extracted text, summaries, and tags. Users can permanently delete a memory together with its private source file; database cascades remove its processing jobs and row-owned derived data. End-to-end provider validation and duplicate detection remain.
 
 Exit criteria:
 

@@ -11,6 +11,7 @@ import {
   connectSupabase,
   createFileMemory,
   createMemory,
+  deleteMemory,
   downloadMemoryFile,
   isSupabaseConfigured,
   listMemories,
@@ -40,7 +41,7 @@ export default function App() {
   const openCapture = () => setCaptureOpen(true);
 
   const content = useMemo(() => {
-    if (activeView === "Library") return <LibraryView onSearch={search} openCapture={openCapture} memories={syncedMemories} onRetry={retryProcessing} onDownload={downloadFile} />;
+    if (activeView === "Library") return <LibraryView onSearch={search} openCapture={openCapture} memories={syncedMemories} onRetry={retryProcessing} onDownload={downloadFile} onDelete={removeMemory} />;
     if (activeView === "Collections") return <CollectionsView />;
     if (activeView === "Graph") return <GraphView />;
     return <Dashboard onSearch={search} openCapture={openCapture} openAssistant={() => setAssistantOpen(true)} />;
@@ -119,6 +120,17 @@ export default function App() {
       showToast(`Downloading “${filename}”`);
     } catch (error) {
       showToast(error instanceof Error ? error.message : "Could not download this file");
+    }
+  }
+
+  async function removeMemory(memory: MemoryRecord) {
+    try {
+      await deleteMemory(memory.id, memory.storage_path);
+      setSyncedMemories((current) => current.filter((item) => item.id !== memory.id));
+      showToast(`“${memory.title}” was permanently deleted`);
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Could not delete this memory");
+      throw error;
     }
   }
 

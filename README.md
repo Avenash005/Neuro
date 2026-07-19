@@ -93,6 +93,8 @@ Keep real credentials in `.env.local`. Never place a service-role key in fronten
 
 After applying the capture migration, deploy the processing worker using [docs/PHASE_2B_WORKER.md](docs/PHASE_2B_WORKER.md). Until its migration, secrets, and Edge Function are deployed, new files remain safely queued.
 
+Library rows open a complete memory detail view. Signed-in owners can retry processing, download private source files, or permanently delete a memory and its associated private file.
+
 ## Quality checks
 
 ```bash
