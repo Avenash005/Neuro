@@ -16,7 +16,7 @@ import {
   UploadCloud,
   X,
 } from "lucide-react";
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { collections, recentItems } from "../../data/mockData";
 import type { MemoryRecord } from "../../lib/supabase";
 import type { LibraryItem } from "../../types/app";
@@ -30,7 +30,13 @@ type LibraryViewProps = {
   onDownload: (path: string, filename: string) => Promise<void>;
 };
 
+type LibrarySelection = {
+  item: LibraryItem;
+  memory?: MemoryRecord;
+};
+
 export function LibraryView({ onSearch, openCapture, memories, onRetry, onDownload }: LibraryViewProps) {
+  const [selection, setSelection] = useState<LibrarySelection | null>(null);
   const syncedItems: LibraryItem[] = memories.map((memory) => ({
     id: memory.id,
     title: memory.title,
@@ -50,7 +56,17 @@ export function LibraryView({ onSearch, openCapture, memories, onRetry, onDownlo
     { title: "Vector search experiments", description: "Benchmarks and learnings from hybrid semantic retrieval.", meta: "Code note · 6 blocks", tag: "AI", icon: Code2, color: "violet" },
   ];
 
+  useEffect(() => {
+    if (!selection) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setSelection(null);
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [selection]);
+
   return (
+    <>
     <main className="page-content">
       <PageIntro eyebrow="Your memory" title="Library" description="Everything you’ve saved, understood and connected." action={<button className="primary-action" onClick={openCapture}><Plus size={17} /> Add memory</button>} />
       <div className="library-toolbar">
@@ -60,10 +76,73 @@ export function LibraryView({ onSearch, openCapture, memories, onRetry, onDownlo
       <div className="library-list">
         {allItems.map((item, index) => {
           const Icon = item.icon;
-          return <article key={`${item.title}-${index}`} className="library-row"><span className={`file-icon ${item.color}`}><Icon size={19} /></span><div><span>{item.tag}</span><h3>{item.title}</h3><p>{item.description}</p></div><small>{item.meta}</small>{item.processingStatus === "failed" && item.id ? <button title="Retry processing" onClick={() => void onRetry(item.id!)}><RotateCw size={16} /></button> : item.storagePath && item.originalFilename ? <button title="Download private file" onClick={() => void onDownload(item.storagePath!, item.originalFilename!)}><Download size={16} /></button> : <button><Star size={16} /></button>}</article>;
+          const memory = item.id ? memories.find((candidate) => candidate.id === item.id) : undefined;
+          return (
+            <article key={item.id ?? `${item.title}-${index}`} className="library-row">
+              <button className="library-open-button" onClick={() => setSelection({ item, memory })} aria-label={`Open ${item.title}`}>
+                <span className={`file-icon ${item.color}`}><Icon size={19} /></span>
+                <span className="library-row-copy"><span>{item.tag}</span><h3>{item.title}</h3><p>{item.description}</p></span>
+                <small>{item.meta}</small>
+              </button>
+              {item.processingStatus === "failed" && item.id
+                ? <button className="library-row-action" title="Retry processing" aria-label={`Retry ${item.title}`} onClick={() => void onRetry(item.id!)}><RotateCw size={16} /></button>
+                : item.storagePath && item.originalFilename
+                  ? <button className="library-row-action" title="Download private file" aria-label={`Download ${item.originalFilename}`} onClick={() => void onDownload(item.storagePath!, item.originalFilename!)}><Download size={16} /></button>
+                  : <button className="library-row-action" title="Favorite" aria-label={`Favorite ${item.title}`}><Star size={16} /></button>}
+            </article>
+          );
         })}
       </div>
     </main>
+    {selection && <MemoryDetail selection={selection} onClose={() => setSelection(null)} onRetry={onRetry} onDownload={onDownload} />}
+    </>
+  );
+}
+
+function MemoryDetail({ selection, onClose, onRetry, onDownload }: {
+  selection: LibrarySelection;
+  onClose: () => void;
+  onRetry: (memoryId: string) => Promise<void>;
+  onDownload: (path: string, filename: string) => Promise<void>;
+}) {
+  const { item, memory } = selection;
+  const content = memory?.content.trim() || memory?.extracted_text?.trim() || item.description;
+  const separateExtraction = Boolean(
+    memory?.content.trim() &&
+    memory?.extracted_text?.trim() &&
+    memory.content.trim() !== memory.extracted_text.trim(),
+  );
+  const created = memory
+    ? new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(new Date(memory.created_at))
+    : null;
+
+  return (
+    <div className="modal-layer" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+      <section className="modal-card memory-detail-modal" role="dialog" aria-modal="true" aria-labelledby="memory-detail-title">
+        <div className="modal-header">
+          <div><span className="card-kicker"><FileText size={14} /> {memory?.kind ?? item.tag}</span><h2 id="memory-detail-title">{item.title}</h2></div>
+          <button className="icon-button" onClick={onClose} aria-label="Close memory"><X size={19} /></button>
+        </div>
+        <div className="memory-detail-meta">
+          <span>{item.meta}</span>
+          {created && <span>Saved {created}</span>}
+          {memory?.original_filename && <span>{memory.original_filename}{memory.file_size ? ` · ${formatFileSize(memory.file_size)}` : ""}</span>}
+        </div>
+        <div className="memory-detail-body">
+          {memory?.summary && <section><h3>AI summary</h3><p>{memory.summary}</p></section>}
+          <section><h3>{memory?.kind === "Note" ? "Note" : "Content"}</h3><p className="memory-detail-content">{content}</p></section>
+          {separateExtraction && <section><h3>Extracted text</h3><p className="memory-detail-content">{memory!.extracted_text}</p></section>}
+        </div>
+        <div className="modal-footer memory-detail-footer">
+          <span>{memory ? "Private to your Neuron account" : "Library preview"}</span>
+          <div>
+            {memory?.processing_status === "failed" && <button className="cancel" onClick={() => void onRetry(memory.id)}><RotateCw size={14} /> Retry processing</button>}
+            {memory?.storage_path && memory.original_filename && <button className="save" onClick={() => void onDownload(memory.storage_path!, memory.original_filename!)}><Download size={14} /> Download</button>}
+            <button className="cancel" onClick={onClose}>Close</button>
+          </div>
+        </div>
+      </section>
+    </div>
   );
 }
 
