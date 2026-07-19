@@ -1,4 +1,6 @@
-import { createClient } from "@supabase/supabase-js";
+// Supabase's remote function bundler requires an explicit npm: specifier.
+// deno-lint-ignore no-import-prefix
+import { createClient } from "npm:@supabase/supabase-js@2.110.7";
 
 type ProcessingJob = {
   id: string;
