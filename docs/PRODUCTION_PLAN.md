@@ -97,7 +97,8 @@ Goal: make the MVP safe and maintainable for real users.
 
 - [x] Add email magic-link and Google/GitHub authentication UI
 - [x] Support anonymous-to-permanent account linking
-- [ ] Add route protection and session-aware profile UI
+- [ ] Add route protection for future private routes
+- [x] Add session-aware profile and sign-out UI
 - [x] Split database changes into versioned migrations
 - [x] Add generated-shape database types and regeneration guidance
 - [x] Add error boundaries and structured error messages
