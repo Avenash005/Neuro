@@ -23,6 +23,7 @@ import {
   type MemoryRecord,
 } from "./lib/supabase";
 import type { BackendStatus, View } from "./types/app";
+import type { SignedUploadOptions } from "./lib/signedUpload";
 
 const DEFAULT_SEARCH = "What did I save about React before demo day?";
 
@@ -135,19 +136,20 @@ export default function App() {
     }
   }
 
-  const saveMemory = async (memory: MemoryInput, file?: File) => {
+  const saveMemory = async (memory: MemoryInput, file?: File, uploadOptions?: SignedUploadOptions) => {
     if (!isSupabaseConfigured) {
       showToast("Add your Supabase key to .env.local to save memories");
       return;
     }
     try {
-      const savedMemory = file ? await createFileMemory(file, memory.title) : await createMemory(memory);
+      const savedMemory = file ? await createFileMemory(file, memory.title, uploadOptions) : await createMemory(memory);
       setSyncedMemories((current) => [savedMemory, ...current]);
       setCaptureOpen(false);
       setBackendStatus("connected");
       showToast(file ? `“${memory.title}” uploaded privately and queued` : `“${memory.title}” is synced to Supabase`);
       if (savedMemory.kind !== "Note") void processSavedMemory(savedMemory.id);
     } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") throw error;
       if (error instanceof DuplicateMemoryError) {
         showToast(error.message);
         throw error;

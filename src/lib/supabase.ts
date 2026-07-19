@@ -2,6 +2,7 @@ import { createClient, type Provider, type User } from "@supabase/supabase-js";
 import type { Database } from "../types/database";
 import { createFileFingerprint, createLinkFingerprint } from "./deduplication";
 import { runMemoryDeletion } from "./memoryDeletion";
+import { uploadToSignedUrlWithProgress, type SignedUploadOptions } from "./signedUpload";
 import { sanitizeFilename, validateUpload } from "./uploads";
 
 export type MemoryKind = "Note" | "Upload" | "Link" | "Voice";
@@ -181,46 +182,61 @@ export async function listMemories(): Promise<MemoryRecord[]> {
   return data.map(normalizeMemory);
 }
 
-export async function createFileMemory(file: File, title: string) {
+export async function createFileMemory(file: File, title: string, uploadOptions: SignedUploadOptions = {}) {
   if (!supabase) throw new Error("Supabase is not configured.");
   validateUpload(file);
   const user = await ensureUser();
+  uploadOptions.onProgress?.(2);
   const contentFingerprint = await createFileFingerprint(file);
+  if (uploadOptions.signal?.aborted) throw new DOMException("Upload cancelled.", "AbortError");
+  uploadOptions.onProgress?.(8);
   await rejectExistingFingerprint(contentFingerprint, "file");
   const path = `${user.id}/${crypto.randomUUID()}-${sanitizeFilename(file.name)}`;
   const bucket = "memory-files";
+  let uploadStarted = false;
 
-  const { error: uploadError } = await supabase.storage.from(bucket).upload(path, file, {
-    cacheControl: "3600",
-    contentType: file.type,
-    upsert: false,
-  });
-  if (uploadError) throw uploadError;
+  try {
+    const { data: signedUpload, error: signingError } = await supabase.storage
+      .from(bucket)
+      .createSignedUploadUrl(path, { upsert: false });
+    if (signingError) throw new Error(signingError.message);
+    if (uploadOptions.signal?.aborted) throw new DOMException("Upload cancelled.", "AbortError");
 
-  const { data, error } = await supabase
-    .from("memories")
-    .insert({
-      user_id: user.id,
-      title,
-      content: "",
-      kind: "upload",
-      processing_status: "pending",
-      storage_bucket: bucket,
-      storage_path: path,
-      original_filename: file.name,
-      mime_type: file.type,
-      file_size: file.size,
-      content_fingerprint: contentFingerprint,
-    })
-    .select("id, title, content, kind, processing_status, created_at, storage_path, original_filename, mime_type, file_size, summary, extracted_text, extracted_at")
-    .single();
+    uploadStarted = true;
+    await uploadToSignedUrlWithProgress(signedUpload.signedUrl, file, {
+      cacheControl: "3600",
+      signal: uploadOptions.signal,
+      onProgress: (percentage) => uploadOptions.onProgress?.(10 + Math.round(percentage * 0.8)),
+    });
+    if (uploadOptions.signal?.aborted) throw new DOMException("Upload cancelled.", "AbortError");
+    uploadOptions.onProgress?.(94);
 
-  if (error) {
-    await supabase.storage.from(bucket).remove([path]);
-    if (error.code === "23505") throw duplicateRaceError("file");
+    const { data, error } = await supabase
+      .from("memories")
+      .insert({
+        user_id: user.id,
+        title,
+        content: "",
+        kind: "upload",
+        processing_status: "pending",
+        storage_bucket: bucket,
+        storage_path: path,
+        original_filename: file.name,
+        mime_type: file.type,
+        file_size: file.size,
+        content_fingerprint: contentFingerprint,
+      })
+      .select("id, title, content, kind, processing_status, created_at, storage_path, original_filename, mime_type, file_size, summary, extracted_text, extracted_at")
+      .single();
+
+    if (error?.code === "23505") throw duplicateRaceError("file");
+    if (error) throw error;
+    uploadOptions.onProgress?.(100);
+    return normalizeMemory(data);
+  } catch (error) {
+    if (uploadStarted) await supabase.storage.from(bucket).remove([path]);
     throw error;
   }
-  return normalizeMemory(data);
 }
 
 export async function retryMemoryProcessing(memoryId: string) {

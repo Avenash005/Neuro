@@ -14,11 +14,12 @@ import {
 import { useEffect, useRef, useState } from "react";
 import { searchResults } from "../../data/mockData";
 import type { MemoryInput } from "../../lib/supabase";
+import type { SignedUploadOptions } from "../../lib/signedUpload";
 import { formatFileSize, validateUpload } from "../../lib/uploads";
 
 type CaptureModalProps = {
   onClose: () => void;
-  onSave: (memory: MemoryInput, file?: File) => Promise<void>;
+  onSave: (memory: MemoryInput, file?: File, uploadOptions?: SignedUploadOptions) => Promise<void>;
 };
 
 export function CaptureModal({ onClose, onSave }: CaptureModalProps) {
@@ -29,9 +30,12 @@ export function CaptureModal({ onClose, onSave }: CaptureModalProps) {
   const [dragActive, setDragActive] = useState(false);
   const [captureError, setCaptureError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const titleRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const uploadAbortRef = useRef<AbortController | null>(null);
   useEffect(() => { titleRef.current?.focus(); }, []);
+  useEffect(() => () => uploadAbortRef.current?.abort(), []);
   const modes = [{ label: "Note" as const, icon: FileText }, { label: "Upload" as const, icon: UploadCloud }, { label: "Link" as const, icon: Link2 }, { label: "Voice" as const, icon: Mic }];
   const selectFile = (file: File | null) => {
     setCaptureError(null);
@@ -55,19 +59,34 @@ export function CaptureModal({ onClose, onSave }: CaptureModalProps) {
       } catch { return setCaptureError("Enter a complete URL beginning with http:// or https://."); }
     }
     setSaving(true);
+    const uploadController = mode === "Upload" ? new AbortController() : null;
+    uploadAbortRef.current = uploadController;
+    setUploadProgress(uploadController ? 0 : null);
     try {
-      await onSave({ title: title.trim() || selectedFile?.name || `${mode} memory`, content: mode === "Link" ? "" : body.trim(), kind: mode, sourceUrl: mode === "Link" ? body.trim() : undefined }, selectedFile ?? undefined);
+      await onSave(
+        { title: title.trim() || selectedFile?.name || `${mode} memory`, content: mode === "Link" ? "" : body.trim(), kind: mode, sourceUrl: mode === "Link" ? body.trim() : undefined },
+        selectedFile ?? undefined,
+        uploadController ? { signal: uploadController.signal, onProgress: setUploadProgress } : undefined,
+      );
     } catch (error) {
-      setCaptureError(error instanceof Error ? error.message : "This memory could not be saved.");
+      if (!(error instanceof DOMException && error.name === "AbortError")) {
+        setCaptureError(error instanceof Error ? error.message : "This memory could not be saved.");
+      }
     } finally {
+      uploadAbortRef.current = null;
       setSaving(false);
+      setUploadProgress(null);
     }
+  };
+  const close = () => {
+    uploadAbortRef.current?.abort();
+    onClose();
   };
 
   return (
     <motion.div className="modal-card capture-modal" initial={{ opacity: 0, scale: .96, y: 12 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: .97, y: 8 }} role="dialog" aria-modal="true">
-      <div className="modal-header"><div><span className="card-kicker"><Plus size={14} /> Add to your brain</span><h2>Capture a memory</h2></div><button className="icon-button" onClick={onClose}><X size={19} /></button></div>
-      <div className="capture-tabs">{modes.map(({ label, icon: Icon }) => <button type="button" key={label} className={mode === label ? "active" : ""} onClick={() => { setMode(label); setCaptureError(null); }}><Icon size={17} />{label}</button>)}</div>
+      <div className="modal-header"><div><span className="card-kicker"><Plus size={14} /> Add to your brain</span><h2>Capture a memory</h2></div><button className="icon-button" onClick={close} aria-label="Close capture"><X size={19} /></button></div>
+      <div className="capture-tabs">{modes.map(({ label, icon: Icon }) => <button type="button" key={label} disabled={saving} className={mode === label ? "active" : ""} onClick={() => { setMode(label); setCaptureError(null); }}><Icon size={17} />{label}</button>)}</div>
       {mode === "Note" ? (
         <div className="note-form"><input ref={titleRef} value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Give this thought a title..." /><textarea value={body} onChange={(event) => setBody(event.target.value)} placeholder="Start typing. Neuron will organize, tag and connect it for you..." /><div className="ai-processing"><Sparkles size={15} /><span>Auto-summary, tags and connections are on</span></div></div>
       ) : mode === "Upload" ? (
@@ -97,8 +116,9 @@ export function CaptureModal({ onClose, onSave }: CaptureModalProps) {
       ) : (
         <div className="drop-zone"><span className="drop-icon"><Mic /></span><h3>Voice recording is next</h3><p>Audio file uploads work now. Live microphone capture arrives with the processing worker.</p><button onClick={() => setMode("Upload")}>Upload audio instead</button></div>
       )}
+      {mode === "Upload" && saving && uploadProgress !== null && <div className="upload-progress" role="progressbar" aria-label="Private file upload" aria-valuemin={0} aria-valuemax={100} aria-valuenow={uploadProgress}><div><span style={{ width: `${uploadProgress}%` }} /></div><p><span>Uploading securely</span><strong>{uploadProgress}%</strong></p></div>}
       {captureError && <div className="capture-error"><X size={15} />{captureError}</div>}
-      <div className="modal-footer"><span><Command size={12} /> Enter to save</span><div><button className="cancel" onClick={onClose} disabled={saving}>Cancel</button><button className="save" onClick={save} disabled={saving}>{saving ? "Saving…" : "Save memory"} <ArrowRight size={15} /></button></div></div>
+      <div className="modal-footer"><span><Command size={12} /> Enter to save</span><div><button className="cancel" onClick={close}>{saving && mode === "Upload" ? "Cancel upload" : "Cancel"}</button><button className="save" onClick={save} disabled={saving}>{saving ? uploadProgress !== null ? `Uploading ${uploadProgress}%` : "Saving…" : "Save memory"} <ArrowRight size={15} /></button></div></div>
     </motion.div>
   );
 }
