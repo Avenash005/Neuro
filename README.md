@@ -17,13 +17,14 @@ Neuron is a personal knowledge workspace for capturing notes, links, files, and 
 - Owner-only Row Level Security policies
 - Versioned SQL migrations and typed database access
 - Error boundary, unit tests, and GitHub Actions CI
-- Semantic-search and AI-assistant interface prototypes
+- Live private hybrid search across exact terms and semantic meaning
 - Strict TypeScript and production builds
 
 The production roadmap is in [docs/PRODUCTION_PLAN.md](docs/PRODUCTION_PLAN.md).
 Phase 2A dashboard setup is in [docs/PHASE_2A_SETUP.md](docs/PHASE_2A_SETUP.md).
 Phase 2B capture setup is in [docs/PHASE_2B_SETUP.md](docs/PHASE_2B_SETUP.md).
 Phase 2B worker deployment is in [docs/PHASE_2B_WORKER.md](docs/PHASE_2B_WORKER.md).
+Phase 2C hybrid search is in [docs/PHASE_2C_SEARCH.md](docs/PHASE_2C_SEARCH.md).
 
 ## Branches
 
@@ -31,7 +32,8 @@ Phase 2B worker deployment is in [docs/PHASE_2B_WORKER.md](docs/PHASE_2B_WORKER.
 | --- | --- |
 | `main` | Stable Phase 1 MVP baseline |
 | `phase-2-production` | Integration branch for production architecture and completed Phase 2 features |
-| `feature/universal-capture` | Phase 2B private uploads, ingestion jobs, and processing status |
+| `feature/universal-capture` | Completed Phase 2B private capture milestone |
+| `feature/semantic-search` | Active Phase 2C full-text, vector, and hybrid retrieval work |
 
 For future work, create focused branches from `phase-2-production`, such as `feature/file-upload`, `feature/semantic-search`, or `fix/mobile-capture`.
 
@@ -55,10 +57,13 @@ src/
 
 supabase/
 ├── migrations/             # Versioned, replayable database changes
+├── functions/              # Secure processing and search Edge Functions
 └── schema.sql              # Current database schema reference
 
 docs/
 ├── PHASE_2A_SETUP.md       # Required Supabase dashboard configuration
+├── PHASE_2B_WORKER.md      # NVIDIA processing worker deployment
+├── PHASE_2C_SEARCH.md      # Hybrid-search architecture and deployment
 └── PRODUCTION_PLAN.md      # Architecture mind map and delivery roadmap
 ```
 
@@ -125,6 +130,7 @@ These commands run frontend type-checking, unit tests, the production build, and
 - Change upload validation: `src/lib/uploads.ts`
 - Change database schema or security policies: `supabase/schema.sql`
 - Change ingestion/AI processing: `supabase/functions/process-memory/index.ts`
+- Change private hybrid search: `supabase/functions/search-memories/index.ts`
 - Change temporary demo content: `src/data/mockData.ts`
 - Change colors and layout: `src/index.css`
 

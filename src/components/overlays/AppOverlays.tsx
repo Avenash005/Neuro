@@ -4,6 +4,7 @@ import {
   Brain,
   Command,
   FileText,
+  LoaderCircle,
   Link2,
   Mic,
   Plus,
@@ -12,8 +13,7 @@ import {
   X,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { searchResults } from "../../data/mockData";
-import type { MemoryInput } from "../../lib/supabase";
+import { searchMemories, type MemoryInput, type MemorySearchResult } from "../../lib/supabase";
 import type { SignedUploadOptions } from "../../lib/signedUpload";
 import { formatFileSize, validateUpload } from "../../lib/uploads";
 
@@ -123,13 +123,56 @@ export function CaptureModal({ onClose, onSave }: CaptureModalProps) {
   );
 }
 
-export function SearchModal({ query, onClose }: { query: string; onClose: () => void }) {
+export function SearchModal({ query, onClose, onOpenMemory }: {
+  query: string;
+  onClose: () => void;
+  onOpenMemory: (memory: MemorySearchResult) => void;
+}) {
   const [value, setValue] = useState(query);
+  const [results, setResults] = useState<MemorySearchResult[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const requestSequence = useRef(0);
+
+  useEffect(() => {
+    const normalized = value.trim();
+    const sequence = ++requestSequence.current;
+    setError(null);
+    if (normalized.length < 2) {
+      setResults([]);
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    const timer = window.setTimeout(() => {
+      void searchMemories(normalized)
+        .then((matches) => {
+          if (requestSequence.current === sequence) setResults(matches);
+        })
+        .catch((searchError) => {
+          if (requestSequence.current === sequence) {
+            setResults([]);
+            setError(searchError instanceof Error ? searchError.message : "Search is unavailable.");
+          }
+        })
+        .finally(() => {
+          if (requestSequence.current === sequence) setLoading(false);
+        });
+    }, 280);
+    return () => window.clearTimeout(timer);
+  }, [value]);
+
   return (
     <motion.div className="modal-card search-modal" initial={{ opacity: 0, scale: .97, y: -10 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: .98 }} role="dialog" aria-modal="true">
       <div className="modal-search"><Sparkles size={20} /><input autoFocus value={value} onChange={(event) => setValue(event.target.value)} placeholder="Ask your second brain..." /><button onClick={onClose}><span>ESC</span><X size={18} /></button></div>
-      {value ? <div className="search-response"><div className="answer-summary"><span><Brain size={18} /></span><p>I found <strong>3 memories</strong> that match your intent, including context around when and why you saved them.</p></div><span className="results-label">Best matches</span>{searchResults.map(({ title, detail, match, icon: Icon }) => <button className="result-row" key={title}><span className="result-icon"><Icon size={18} /></span><span><strong>{title}</strong><small>{detail}</small></span><em>{match}</em></button>)}</div> : <div className="empty-search"><Brain size={34} /><h3>Search by meaning, not just words</h3><p>Try “What was that article I saved before demo day?”</p></div>}
-      <div className="search-footer"><span><Sparkles size={13} /> Semantic search across 1,248 memories</span><span>↑↓ navigate · ↵ open</span></div>
+      {loading ? <div className="empty-search search-loading"><LoaderCircle size={32} /><h3>Searching your memories</h3><p>Combining exact words with meaning...</p></div>
+        : error ? <div className="empty-search search-error"><X size={32} /><h3>Search could not finish</h3><p>{error}</p></div>
+        : value.trim().length >= 2 ? <div className="search-response"><div className="answer-summary"><span><Brain size={18} /></span><p>{results.length ? <>I found <strong>{results.length} {results.length === 1 ? "memory" : "memories"}</strong> ranked by words and meaning.</> : <>No private memories matched this search yet.</>}</p></div>{results.length > 0 && <><span className="results-label">Best matches</span>{results.map((memory) => {
+          const Icon = memory.kind === "Voice" ? Mic : memory.kind === "Link" ? Link2 : memory.kind === "Upload" ? UploadCloud : FileText;
+          const detail = memory.summary || memory.extracted_text || memory.content || `${memory.kind} memory`;
+          return <button className="result-row" key={memory.id} onClick={() => onOpenMemory(memory)}><span className="result-icon"><Icon size={18} /></span><span><strong>{memory.title}</strong><small>{detail}</small></span><em>{memory.match === "hybrid" ? "Best match" : memory.match === "meaning" ? "Meaning" : "Words"}</em></button>;
+        })}</>}</div> : <div className="empty-search"><Brain size={34} /><h3>Search by meaning, not just words</h3><p>Try “What was that article I saved before demo day?”</p></div>}
+      <div className="search-footer"><span><Sparkles size={13} /> Private hybrid search</span><span>Type naturally · click a result to open</span></div>
     </motion.div>
   );
 }

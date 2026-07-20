@@ -140,10 +140,10 @@ Exit criteria:
 
 Goal: return grounded answers from the user’s own memory.
 
-- [ ] Generate embeddings in background jobs
-- [ ] Implement PostgreSQL full-text search
-- [ ] Add vector search with pgvector or Qdrant
-- [ ] Implement hybrid retrieval and reranking
+- [x] Generate embeddings in background jobs
+- [x] Implement PostgreSQL full-text search
+- [x] Add vector search with pgvector
+- [x] Implement hybrid retrieval with reciprocal-rank fusion
 - [ ] Add filters for type, collection, date, project, and people
 - [ ] Add streaming assistant responses
 - [ ] Attach source citations to every generated answer

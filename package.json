@@ -8,7 +8,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "check:worker": "deno check --config supabase/functions/deno.json supabase/functions/process-memory/index.ts && deno lint --config supabase/functions/deno.json supabase/functions/process-memory/index.ts supabase/functions/process-memory/index_test.ts && deno test --config supabase/functions/deno.json --allow-env supabase/functions/process-memory/index_test.ts",
+    "check:worker": "deno check --config supabase/functions/deno.json supabase/functions/process-memory/index.ts supabase/functions/search-memories/index.ts && deno lint --config supabase/functions/deno.json supabase/functions/process-memory/index.ts supabase/functions/process-memory/index_test.ts supabase/functions/search-memories/index.ts supabase/functions/search-memories/index_test.ts supabase/functions/_shared/nvidia-embeddings.ts supabase/functions/_shared/nvidia-embeddings_test.ts && deno test --config supabase/functions/deno.json --allow-env supabase/functions/process-memory/index_test.ts supabase/functions/search-memories/index_test.ts supabase/functions/_shared/nvidia-embeddings_test.ts",
     "check": "npm run typecheck && npm run test && npm run build",
     "build": "vite build",
     "preview": "vite preview"

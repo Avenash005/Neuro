@@ -4,3 +4,7 @@ project_id = "wanonpqnfdhyvyjfrtrf"
 # Authentication is verified inside the function so it can support both
 # signed-in user invocations and a separate scheduled-worker secret.
 verify_jwt = false
+
+[functions.search-memories]
+# The function validates the bearer token before calling its service-only search RPC.
+verify_jwt = false
