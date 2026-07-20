@@ -13,7 +13,6 @@ import {
   Plus,
   RotateCw,
   Search,
-  Sparkles,
   Star,
   Trash2,
   UploadCloud,
@@ -245,26 +244,6 @@ export function CollectionsView({ collections, memories, onCreate, onDelete, onO
       : <div className="collections-empty"><FolderPlus size={34} /><h2>Create your first collection</h2><p>Group related memories and keep the organization synced across devices.</p><button className="primary-action" onClick={() => setCreating(true)}><Plus size={16} /> New collection</button></div>}
     </main>
   );
-}
-
-export function GraphView({ openAssistant }: { openAssistant: () => void }) {
-  return (
-    <main className="page-content graph-page">
-      <PageIntro eyebrow="42 connections this week" title="Knowledge graph" description="See how your ideas, projects and sources shape each other." action={<button className="primary-action" onClick={openAssistant}><Sparkles size={17} /> Find connections</button>} />
-      <div className="graph-canvas">
-        <div className="graph-tip"><Sparkles size={15} /><span>Neuron found 3 new links in your recent notes</span><X size={14} /></div>
-        <svg viewBox="0 0 900 520" role="img" aria-label="Interactive knowledge graph">
-          <g className="graph-lines"><line x1="450" y1="255" x2="230" y2="160"/><line x1="450" y1="255" x2="686" y2="140"/><line x1="450" y1="255" x2="690" y2="360"/><line x1="450" y1="255" x2="220" y2="365"/><line x1="230" y1="160" x2="120" y2="270"/><line x1="230" y1="160" x2="330" y2="70"/><line x1="686" y1="140" x2="790" y2="250"/><line x1="690" y1="360" x2="545" y2="442"/><line x1="220" y1="365" x2="95" y2="425"/></g>
-          <GraphNode x={450} y={255} r={64} label="Neuron" sub="Project" color="#6657d9" main/><GraphNode x={230} y={160} r={45} label="React" sub="Topic" color="#4c9db6"/><GraphNode x={686} y={140} r={48} label="AI memory" sub="Topic" color="#b45d8b"/><GraphNode x={690} y={360} r={43} label="Offline first" sub="Idea" color="#168c75"/><GraphNode x={220} y={365} r={46} label="Product" sub="Collection" color="#de793d"/><GraphNode x={120} y={270} r={32} label="Redux" sub="Tech" color="#806cd9"/><GraphNode x={330} y={70} r={31} label="Atlas" sub="Project" color="#4d7db4"/><GraphNode x={790} y={250} r={31} label="Qdrant" sub="Tech" color="#a65b79"/><GraphNode x={545} y={442} r={33} label="Sync" sub="Idea" color="#4a9b79"/><GraphNode x={95} y={425} r={29} label="Maya" sub="Person" color="#bd7550"/>
-        </svg>
-        <div className="graph-legend"><span><i className="project" />Projects</span><span><i className="topic" />Topics</span><span><i className="source" />Sources</span><span><i className="people" />People</span></div>
-      </div>
-    </main>
-  );
-}
-
-function GraphNode({ x, y, r, label, sub, color, main = false }: { x: number; y: number; r: number; label: string; sub: string; color: string; main?: boolean }) {
-  return <g className={`graph-node ${main ? "main" : ""}`}><circle cx={x} cy={y} r={r + 8} fill={`${color}12`} /><circle cx={x} cy={y} r={r} fill={color} /><text x={x} y={y - 3} textAnchor="middle" fill="white" className="node-label">{label}</text><text x={x} y={y + 17} textAnchor="middle" fill="white" opacity=".72" className="node-sub">{sub}</text></g>;
 }
 
 function PageIntro({ eyebrow, title, description, action }: { eyebrow: string; title: string; description: string; action: ReactNode }) {

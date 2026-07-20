@@ -7,7 +7,8 @@ import { AssistantPanel, CaptureModal, SearchModal } from "./components/overlays
 import { AuthModal } from "./features/auth/AuthModal";
 import { ActivityView } from "./features/activity/ActivityView";
 import { Dashboard } from "./features/dashboard/Dashboard";
-import { CollectionsView, GraphView, LibraryView } from "./features/views/FeatureViews";
+import { KnowledgeGraphView } from "./features/graph/KnowledgeGraphView";
+import { CollectionsView, LibraryView } from "./features/views/FeatureViews";
 import {
   addMemoryToCollection,
   connectSupabase,
@@ -59,7 +60,7 @@ export default function App() {
     if (activeView === "Library") return <LibraryView onSearch={search} openCapture={openCapture} memories={syncedMemories} collections={syncedCollections} onRetry={retryProcessing} onDownload={downloadFile} onDelete={removeMemory} onToggleFavorite={toggleFavorite} onToggleCollection={toggleCollectionMembership} openMemoryId={openMemoryId} onOpenedMemory={() => setOpenMemoryId(null)} />;
     if (activeView === "Activity") return <ActivityView memories={syncedMemories} onOpenMemory={openSearchResult} openCapture={openCapture} />;
     if (activeView === "Collections") return <CollectionsView collections={syncedCollections} memories={syncedMemories} onCreate={createWorkspaceCollection} onDelete={removeWorkspaceCollection} onOpenMemory={openSearchResult} onRemoveMemory={removeCollectionMembership} />;
-    if (activeView === "Graph") return <GraphView openAssistant={() => setAssistantOpen(true)} />;
+    if (activeView === "Graph") return <KnowledgeGraphView memories={syncedMemories} onOpenMemory={openSearchResult} openAssistant={() => setAssistantOpen(true)} />;
     return <Dashboard onSearch={search} openCapture={openCapture} openAssistant={() => setAssistantOpen(true)} openActivity={() => setActiveView("Activity")} openLibrary={() => setActiveView("Library")} memories={syncedMemories} onOpenMemory={openSearchResult} onToggleFavorite={toggleFavorite} />;
   }, [activeView, syncedMemories, syncedCollections, openMemoryId]);
 

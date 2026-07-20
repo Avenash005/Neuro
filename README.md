@@ -4,7 +4,7 @@ Neuron is a personal knowledge workspace for capturing notes, links, files, and 
 
 ## Current status
 
-- Responsive dashboard, library, collections, and knowledge graph UI
+- Responsive dashboard, library, collections, and real-memory knowledge graph UI
 - Note, link, upload, and voice capture flows
 - Supabase anonymous authentication
 - Permanent email account upgrades and returning-user magic-link sign-in
@@ -31,6 +31,7 @@ Phase 2C hybrid search is in [docs/PHASE_2C_SEARCH.md](docs/PHASE_2C_SEARCH.md).
 Activity history and interaction behavior is in [docs/ACTIVITY_HISTORY.md](docs/ACTIVITY_HISTORY.md).
 Grounded assistant architecture is in [docs/GROUNDED_ASSISTANT.md](docs/GROUNDED_ASSISTANT.md).
 Persistent favorites and collections are documented in [docs/PERSISTENT_ORGANIZATION.md](docs/PERSISTENT_ORGANIZATION.md).
+Knowledge graph behavior is documented in [docs/KNOWLEDGE_GRAPH.md](docs/KNOWLEDGE_GRAPH.md).
 
 ## Branches
 
@@ -43,6 +44,7 @@ Persistent favorites and collections are documented in [docs/PERSISTENT_ORGANIZA
 | `feature/activity-history` | Activity timeline and complete UI interaction pass |
 | `feature/grounded-assistant` | Private retrieval-augmented answers with verified citations |
 | `feature/persistent-organization` | Owner-scoped favorites, collections, and memory membership |
+| `feature/knowledge-graph` | Interactive graph generated from private memories and AI tags |
 
 For future work, create focused branches from `phase-2-production`, such as `feature/file-upload`, `feature/semantic-search`, or `fix/mobile-capture`.
 
@@ -140,7 +142,9 @@ These commands run frontend type-checking, unit tests, the production build, and
 - Change capture/search/assistant dialogs: `src/components/overlays/AppOverlays.tsx`
 - Change dashboard widgets: `src/features/dashboard/Dashboard.tsx`
 - Change past-work history: `src/features/activity/ActivityView.tsx`
-- Change Library, Collections, or Graph: `src/features/views/FeatureViews.tsx`
+- Change Library or Collections: `src/features/views/FeatureViews.tsx`
+- Change the knowledge graph UI: `src/features/graph/KnowledgeGraphView.tsx`
+- Change graph-building rules: `src/features/graph/graphData.ts`
 - Change Supabase queries: `src/lib/supabase.ts`
 - Change upload validation: `src/lib/uploads.ts`
 - Change database schema or security policies: `supabase/schema.sql`
