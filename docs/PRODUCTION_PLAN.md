@@ -160,7 +160,7 @@ Exit criteria:
 
 Goal: turn stored information into useful action.
 
-- [ ] Persist collections and AI-generated collection rules
+- [ ] Add AI-generated collection rules (manual collections and membership are now persisted)
 - [ ] Derive people, organizations, technologies, dates, and links
 - [ ] Build a real graph API and interactive exploration UI
 - [ ] Generate flashcards and quizzes

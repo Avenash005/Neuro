@@ -9,20 +9,27 @@ import { ActivityView } from "./features/activity/ActivityView";
 import { Dashboard } from "./features/dashboard/Dashboard";
 import { CollectionsView, GraphView, LibraryView } from "./features/views/FeatureViews";
 import {
+  addMemoryToCollection,
   connectSupabase,
+  createCollection,
   createFileMemory,
   createMemory,
   deleteMemory,
+  deleteCollection,
   downloadMemoryFile,
   isSupabaseConfigured,
   listMemories,
+  listCollections,
   onAuthChange,
   processMemoryBacklog,
   processMemoryNow,
   retryMemoryProcessing,
+  removeMemoryFromCollection,
+  setMemoryFavorite,
   DuplicateMemoryError,
   type MemoryInput,
   type MemoryRecord,
+  type CollectionRecord,
 } from "./lib/supabase";
 import type { BackendStatus, View } from "./types/app";
 import type { SignedUploadOptions } from "./lib/signedUpload";
@@ -40,19 +47,21 @@ export default function App() {
   const [authUser, setAuthUser] = useState<User | null>(null);
   const [backendStatus, setBackendStatus] = useState<BackendStatus>(isSupabaseConfigured ? "connecting" : "local");
   const [syncedMemories, setSyncedMemories] = useState<MemoryRecord[]>([]);
+  const [syncedCollections, setSyncedCollections] = useState<CollectionRecord[]>([]);
   const [openMemoryId, setOpenMemoryId] = useState<string | null>(null);
   const autoProcessingIds = useRef(new Set<string>());
+  const activeUserId = useRef<string | null>(null);
 
   const search = (query: string) => setSearchQuery(query || DEFAULT_SEARCH);
   const openCapture = () => setCaptureOpen(true);
 
   const content = useMemo(() => {
-    if (activeView === "Library") return <LibraryView onSearch={search} openCapture={openCapture} memories={syncedMemories} onRetry={retryProcessing} onDownload={downloadFile} onDelete={removeMemory} openMemoryId={openMemoryId} onOpenedMemory={() => setOpenMemoryId(null)} />;
+    if (activeView === "Library") return <LibraryView onSearch={search} openCapture={openCapture} memories={syncedMemories} collections={syncedCollections} onRetry={retryProcessing} onDownload={downloadFile} onDelete={removeMemory} onToggleFavorite={toggleFavorite} onToggleCollection={toggleCollectionMembership} openMemoryId={openMemoryId} onOpenedMemory={() => setOpenMemoryId(null)} />;
     if (activeView === "Activity") return <ActivityView memories={syncedMemories} onOpenMemory={openSearchResult} openCapture={openCapture} />;
-    if (activeView === "Collections") return <CollectionsView onSearch={search} />;
+    if (activeView === "Collections") return <CollectionsView collections={syncedCollections} memories={syncedMemories} onCreate={createWorkspaceCollection} onDelete={removeWorkspaceCollection} onOpenMemory={openSearchResult} onRemoveMemory={removeCollectionMembership} />;
     if (activeView === "Graph") return <GraphView openAssistant={() => setAssistantOpen(true)} />;
-    return <Dashboard onSearch={search} openCapture={openCapture} openAssistant={() => setAssistantOpen(true)} openActivity={() => setActiveView("Activity")} openLibrary={() => setActiveView("Library")} memories={syncedMemories} onOpenMemory={openSearchResult} />;
-  }, [activeView, syncedMemories, openMemoryId]);
+    return <Dashboard onSearch={search} openCapture={openCapture} openAssistant={() => setAssistantOpen(true)} openActivity={() => setActiveView("Activity")} openLibrary={() => setActiveView("Library")} memories={syncedMemories} onOpenMemory={openSearchResult} onToggleFavorite={toggleFavorite} />;
+  }, [activeView, syncedMemories, syncedCollections, openMemoryId]);
 
   useEffect(() => {
     if (!isSupabaseConfigured) return;
@@ -60,10 +69,12 @@ export default function App() {
     const initialize = async () => {
       try {
         const user = await connectSupabase();
-        const memories = await listMemories();
+        const [memories, collections] = await Promise.all([listMemories(), listCollections()]);
         if (active) {
+          activeUserId.current = user ? user.id : null;
           setAuthUser(user || null);
           setSyncedMemories(memories);
+          setSyncedCollections(collections);
           setBackendStatus("connected");
           void processMemoryBacklog().then(async (backlog) => {
             if (!active || backlog.processed === 0) return;
@@ -81,7 +92,22 @@ export default function App() {
 
   useEffect(() => onAuthChange((user) => {
     setAuthUser(user);
-    if (user) setBackendStatus("connected");
+    if (!user) {
+      activeUserId.current = null;
+      setSyncedMemories([]);
+      setSyncedCollections([]);
+      return;
+    }
+    setBackendStatus("connected");
+    if (activeUserId.current === user.id) return;
+    activeUserId.current = user.id;
+    setSyncedMemories([]);
+    setSyncedCollections([]);
+    void Promise.all([listMemories(), listCollections()]).then(([memories, collections]) => {
+      if (activeUserId.current !== user.id) return;
+      setSyncedMemories(memories);
+      setSyncedCollections(collections);
+    }).catch((error) => console.error("Could not load the signed-in workspace", error));
   }), []);
 
   useEffect(() => {
@@ -149,10 +175,63 @@ export default function App() {
     try {
       await deleteMemory(memory.id, memory.storage_path);
       setSyncedMemories((current) => current.filter((item) => item.id !== memory.id));
+      setSyncedCollections((current) => current.map((collection) => ({ ...collection, memory_ids: collection.memory_ids.filter((id) => id !== memory.id) })));
       showToast(`“${memory.title}” was permanently deleted`);
     } catch (error) {
       showToast(error instanceof Error ? error.message : "Could not delete this memory");
       throw error;
+    }
+  }
+
+  async function toggleFavorite(memoryId: string, isFavorite: boolean) {
+    const previous = syncedMemories.find((memory) => memory.id === memoryId)?.is_favorite ?? false;
+    setSyncedMemories((current) => current.map((memory) => memory.id === memoryId ? { ...memory, is_favorite: isFavorite } : memory));
+    try {
+      await setMemoryFavorite(memoryId, isFavorite);
+      showToast(isFavorite ? "Added to favorites" : "Removed from favorites");
+    } catch (error) {
+      setSyncedMemories((current) => current.map((memory) => memory.id === memoryId ? { ...memory, is_favorite: previous } : memory));
+      showToast(error instanceof Error ? error.message : "Could not update favorite");
+    }
+  }
+
+  async function createWorkspaceCollection(name: string) {
+    const collection = await createCollection(name);
+    setSyncedCollections((current) => [collection, ...current]);
+    showToast(`Created “${collection.name}”`);
+    return collection;
+  }
+
+  async function removeWorkspaceCollection(collectionId: string) {
+    await deleteCollection(collectionId);
+    setSyncedCollections((current) => current.filter((collection) => collection.id !== collectionId));
+    showToast("Collection deleted; memories were kept");
+  }
+
+  async function toggleCollectionMembership(collectionId: string, memoryId: string) {
+    const collection = syncedCollections.find((item) => item.id === collectionId);
+    if (!collection) return;
+    const removing = collection.memory_ids.includes(memoryId);
+    try {
+      if (removing) await removeMemoryFromCollection(collectionId, memoryId);
+      else await addMemoryToCollection(collectionId, memoryId);
+      setSyncedCollections((current) => current.map((item) => item.id === collectionId ? {
+        ...item,
+        memory_ids: removing ? item.memory_ids.filter((id) => id !== memoryId) : [...item.memory_ids, memoryId],
+      } : item));
+      showToast(removing ? `Removed from “${collection.name}”` : `Added to “${collection.name}”`);
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Could not update collection");
+    }
+  }
+
+  async function removeCollectionMembership(collectionId: string, memoryId: string) {
+    try {
+      await removeMemoryFromCollection(collectionId, memoryId);
+      setSyncedCollections((current) => current.map((item) => item.id === collectionId ? { ...item, memory_ids: item.memory_ids.filter((id) => id !== memoryId) } : item));
+      showToast("Removed from collection");
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Could not remove this memory");
     }
   }
 
