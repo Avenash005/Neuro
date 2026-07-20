@@ -40,6 +40,23 @@ export type CollectionRecord = {
   memory_ids: string[];
 };
 
+export type ActionItemStatus = "suggested" | "accepted" | "completed" | "dismissed";
+
+export type ActionItemRecord = {
+  id: string;
+  memory_id: string;
+  title: string;
+  description: string;
+  item_type: "task" | "reminder";
+  status: ActionItemStatus;
+  due_at: string | null;
+  confidence: number;
+  evidence: string;
+  completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 export type EntityType = "person" | "organization" | "technology" | "date" | "url" | "place" | "concept";
 
 export type KnowledgeEntityRecord = {
@@ -275,6 +292,29 @@ export async function listKnowledgeEntityData(): Promise<KnowledgeEntityData> {
     memoryEntities: memoryEntityResult.data,
     relationships: relationshipResult.data,
   };
+}
+
+export async function listActionItems(): Promise<ActionItemRecord[]> {
+  if (!supabase) return [];
+  await ensureUser();
+  const { data, error } = await supabase
+    .from("action_items")
+    .select("id, memory_id, title, description, item_type, status, due_at, confidence, evidence, completed_at, created_at, updated_at")
+    .neq("status", "dismissed")
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return data as ActionItemRecord[];
+}
+
+export async function updateActionItemStatus(actionItemId: string, status: Exclude<ActionItemStatus, "suggested">) {
+  if (!supabase) throw new Error("Supabase is not configured.");
+  await ensureUser();
+  const { data, error } = await supabase.rpc("update_action_item_status", {
+    target_action_item_id: actionItemId,
+    next_status: status,
+  });
+  if (error) throw error;
+  return data as ActionItemRecord;
 }
 
 export async function createCollection(name: string, description = "", color = "#6657d9"): Promise<CollectionRecord> {

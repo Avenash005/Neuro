@@ -22,6 +22,7 @@ Neuron is a personal knowledge workspace for capturing notes, links, files, and 
 - Functional navigation, Library filters, and owner-scoped favorites and collections that sync across devices
 - Grounded Ask Neuron answers with validated, clickable private-memory citations
 - User-controlled, three-memory entity backfill with visible progress and no automatic provider spend
+- Source-backed task and reminder suggestions with explicit accept/dismiss confirmation
 - Strict TypeScript and production builds
 
 The production roadmap is in [docs/PRODUCTION_PLAN.md](docs/PRODUCTION_PLAN.md).
@@ -34,6 +35,7 @@ Grounded assistant architecture is in [docs/GROUNDED_ASSISTANT.md](docs/GROUNDED
 Persistent favorites and collections are documented in [docs/PERSISTENT_ORGANIZATION.md](docs/PERSISTENT_ORGANIZATION.md).
 Knowledge graph behavior is documented in [docs/KNOWLEDGE_GRAPH.md](docs/KNOWLEDGE_GRAPH.md).
 Entity extraction and provenance are documented in [docs/ENTITY_EXTRACTION.md](docs/ENTITY_EXTRACTION.md).
+Task extraction and confirmation are documented in [docs/ACTION_ITEMS.md](docs/ACTION_ITEMS.md).
 
 ## Branches
 
@@ -49,6 +51,7 @@ Entity extraction and provenance are documented in [docs/ENTITY_EXTRACTION.md](d
 | `feature/knowledge-graph` | Interactive graph generated from private memories and AI tags |
 | `feature/entity-graph` | Typed entity extraction and evidence-backed relationships |
 | `feature/controlled-entity-backfill` | Cost-capped reanalysis for existing memories |
+| `feature/action-items` | Confirmed, source-backed tasks and reminders |
 
 For future work, create focused branches from `phase-2-production`, such as `feature/file-upload`, `feature/semantic-search`, or `fix/mobile-capture`.
 

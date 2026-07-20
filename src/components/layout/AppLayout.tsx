@@ -8,6 +8,7 @@ import {
   Layers3,
   Menu,
   Network,
+  ListTodo,
   PanelLeftClose,
   Plus,
   Settings,
@@ -40,6 +41,7 @@ export function Sidebar({ activeView, setActiveView, openCapture, profileName, p
   const nav = [
     { label: "Home" as View, icon: Home },
     { label: "Library" as View, icon: Layers3 },
+    { label: "Tasks" as View, icon: ListTodo },
     { label: "Activity" as View, icon: Clock3 },
     { label: "Collections" as View, icon: FolderKanban },
     { label: "Graph" as View, icon: Network },

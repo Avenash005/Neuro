@@ -167,7 +167,7 @@ Goal: turn stored information into useful action.
 - [x] Add explicit cost-capped backfill for legacy memory entities
 - [ ] Generate flashcards and quizzes
 - [ ] Implement spaced-repetition scheduling
-- [ ] Extract tasks and reminders with user confirmation
+- [x] Extract tasks and reminders with user confirmation
 - [ ] Generate daily and weekly recaps
 
 ### Phase 3 — Scale and ecosystem
