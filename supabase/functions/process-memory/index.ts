@@ -1,6 +1,9 @@
 // Supabase's remote function bundler requires an explicit npm: specifier.
 // deno-lint-ignore no-import-prefix
 import { createClient } from "npm:@supabase/supabase-js@2.110.7";
+// Supabase's remote function bundler also requires an explicit npm specifier here.
+// deno-lint-ignore no-import-prefix
+import { unzipSync } from "npm:fflate@0.8.2";
 
 type ProcessingJob = {
   id: string;
@@ -28,7 +31,7 @@ type ExtractionResult = {
   summary: string;
   tags: string[];
   model: string;
-  provider: "openai" | "local";
+  provider: "nvidia" | "openai" | "local";
 };
 
 const corsHeaders = {
@@ -39,8 +42,19 @@ const corsHeaders = {
 
 const MAX_WEB_BYTES = 1_500_000;
 const MAX_MODEL_TEXT = 120_000;
-const EXTRACTION_MODEL = Deno.env.get("OPENAI_EXTRACTION_MODEL") || "gpt-5.6-luna";
-const TRANSCRIPTION_MODEL = Deno.env.get("OPENAI_TRANSCRIPTION_MODEL") || "gpt-4o-mini-transcribe";
+const NVIDIA_BASE_URL = (Deno.env.get("NVIDIA_BASE_URL") || "https://integrate.api.nvidia.com/v1").replace(/\/+$/, "");
+const NVIDIA_TEXT_MODEL = Deno.env.get("NVIDIA_TEXT_MODEL") || "nvidia/nemotron-3-nano-30b-a3b";
+const NVIDIA_VISION_MODEL = Deno.env.get("NVIDIA_VISION_MODEL") || "nvidia/nemotron-nano-12b-v2-vl";
+const NVIDIA_TRANSCRIPTION_URL = Deno.env.get("NVIDIA_TRANSCRIPTION_URL") ||
+  "https://1598d209-5e27-4d3c-8079-4751568b1081.invocation.api.nvcf.nvidia.com/v1/audio/transcriptions";
+const OPENAI_EXTRACTION_MODEL = Deno.env.get("OPENAI_EXTRACTION_MODEL") || "gpt-5.6-luna";
+const OPENAI_TRANSCRIPTION_MODEL = Deno.env.get("OPENAI_TRANSCRIPTION_MODEL") || "gpt-4o-mini-transcribe";
+const NVIDIA_INLINE_IMAGE_BYTES = 180_000;
+const OPEN_XML_TYPES = new Set([
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+]);
 
 class TerminalProcessingError extends Error {}
 
@@ -92,15 +106,9 @@ export function localExtraction(text: string): ExtractionResult {
   };
 }
 
-function parseModelResult(payload: Record<string, unknown>): Omit<ExtractionResult, "model" | "provider"> {
-  const output = Array.isArray(payload.output) ? payload.output : [];
-  const outputText = output
-    .flatMap((item) => typeof item === "object" && item && Array.isArray((item as { content?: unknown[] }).content) ? (item as { content: unknown[] }).content : [])
-    .find((item) => typeof item === "object" && item && (item as { type?: string }).type === "output_text") as { text?: string } | undefined;
-  if (!outputText?.text) throw new Error("OpenAI returned no extraction text.");
-  const parsed = JSON.parse(outputText.text) as Partial<ExtractionResult>;
+function validatedExtraction(parsed: Partial<ExtractionResult>): Omit<ExtractionResult, "model" | "provider"> {
   if (typeof parsed.extracted_text !== "string" || typeof parsed.summary !== "string" || !Array.isArray(parsed.tags)) {
-    throw new Error("OpenAI returned an invalid extraction result.");
+    throw new Error("The AI provider returned an invalid extraction result.");
   }
   return {
     extracted_text: parsed.extracted_text.slice(0, 500_000),
@@ -109,7 +117,37 @@ function parseModelResult(payload: Record<string, unknown>): Omit<ExtractionResu
   };
 }
 
-async function callResponses(content: Record<string, unknown>[], userId: string): Promise<ExtractionResult> {
+function parseOpenAiResult(payload: Record<string, unknown>): Omit<ExtractionResult, "model" | "provider"> {
+  const output = Array.isArray(payload.output) ? payload.output : [];
+  const outputText = output
+    .flatMap((item) => typeof item === "object" && item && Array.isArray((item as { content?: unknown[] }).content) ? (item as { content: unknown[] }).content : [])
+    .find((item) => typeof item === "object" && item && (item as { type?: string }).type === "output_text") as { text?: string } | undefined;
+  if (!outputText?.text) throw new Error("OpenAI returned no extraction text.");
+  return validatedExtraction(JSON.parse(outputText.text) as Partial<ExtractionResult>);
+}
+
+export function parseNvidiaResult(payload: Record<string, unknown>): Omit<ExtractionResult, "model" | "provider"> {
+  const choices = Array.isArray(payload.choices) ? payload.choices : [];
+  const message = choices[0] && typeof choices[0] === "object"
+    ? (choices[0] as { message?: { content?: unknown } }).message
+    : undefined;
+  if (typeof message?.content !== "string" || !message.content.trim()) {
+    throw new Error("NVIDIA returned no extraction text.");
+  }
+
+  const withoutFence = message.content.trim()
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/i, "")
+    .trim();
+  const firstBrace = withoutFence.indexOf("{");
+  const lastBrace = withoutFence.lastIndexOf("}");
+  const json = firstBrace >= 0 && lastBrace > firstBrace
+    ? withoutFence.slice(firstBrace, lastBrace + 1)
+    : withoutFence;
+  return validatedExtraction(JSON.parse(json) as Partial<ExtractionResult>);
+}
+
+async function callOpenAiResponses(content: Record<string, unknown>[], userId: string): Promise<ExtractionResult> {
   const apiKey = Deno.env.get("OPENAI_API_KEY");
   if (!apiKey) throw new TerminalProcessingError("OPENAI_API_KEY is not configured for the processing function.");
 
@@ -117,7 +155,7 @@ async function callResponses(content: Record<string, unknown>[], userId: string)
     method: "POST",
     headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
     body: JSON.stringify({
-      model: EXTRACTION_MODEL,
+      model: OPENAI_EXTRACTION_MODEL,
       store: false,
       reasoning: { effort: "none" },
       max_output_tokens: 5000,
@@ -151,16 +189,86 @@ async function callResponses(content: Record<string, unknown>[], userId: string)
     throw new Error(`OpenAI Responses error ${response.status}: ${detail}`);
   }
 
-  return { ...parseModelResult(await response.json()), model: EXTRACTION_MODEL, provider: "openai" };
+  return { ...parseOpenAiResult(await response.json()), model: OPENAI_EXTRACTION_MODEL, provider: "openai" };
+}
+
+function nvidiaError(label: string, status: number, detail: string) {
+  const message = `NVIDIA ${label} error ${status}: ${detail.slice(0, 800)}`;
+  if ([400, 401, 402, 403, 404, 413, 422].includes(status)) return new TerminalProcessingError(message);
+  return new Error(message);
+}
+
+async function resolveNvidiaResponse(response: Response, apiKey: string, label: string): Promise<Record<string, unknown>> {
+  let current = response;
+  for (let attempt = 0; attempt < 20 && current.status === 202; attempt += 1) {
+    const pending = await current.json().catch(() => ({})) as Record<string, unknown>;
+    const requestId = pending.requestId || pending.reqId || pending.id;
+    if (typeof requestId !== "string" || !requestId) throw new Error(`NVIDIA ${label} was queued without a request id.`);
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    current = await fetch(`https://api.nvcf.nvidia.com/v2/nvcf/pexec/status/${encodeURIComponent(requestId)}`, {
+      headers: { Authorization: `Bearer ${apiKey}`, Accept: "application/json" },
+    });
+  }
+  const text = await current.text();
+  if (!current.ok || current.status === 202) {
+    throw nvidiaError(label, current.status, text || "The request did not complete in time.");
+  }
+  try {
+    return JSON.parse(text) as Record<string, unknown>;
+  } catch {
+    throw new Error(`NVIDIA ${label} returned invalid JSON.`);
+  }
+}
+
+const NVIDIA_JSON_INSTRUCTIONS = `Return only valid JSON with exactly these keys:
+{"extracted_text":"faithful extracted or transcribed content","summary":"concise factual summary under 120 words","tags":["up to 8 short tags"]}
+Preserve important names, dates, links, headings, and actionable details. Do not invent missing content.`;
+
+async function callNvidiaChat(
+  content: string | Record<string, unknown>[],
+  model: string,
+  assetId?: string,
+): Promise<ExtractionResult> {
+  const apiKey = Deno.env.get("NVIDIA_API_KEY");
+  if (!apiKey) throw new TerminalProcessingError("NVIDIA_API_KEY is not configured for the processing function.");
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${apiKey}`,
+    Accept: "application/json",
+    "Content-Type": "application/json",
+  };
+  if (assetId) headers["NVCF-INPUT-ASSET-REFERENCES"] = assetId;
+  const response = await fetch(`${NVIDIA_BASE_URL}/chat/completions`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      model,
+      messages: [
+        { role: "system", content: `/no_think\n${NVIDIA_JSON_INSTRUCTIONS}` },
+        { role: "user", content },
+      ],
+      temperature: 0.1,
+      top_p: 0.9,
+      max_tokens: 5000,
+      stream: false,
+    }),
+  });
+  const payload = await resolveNvidiaResponse(response, apiKey, "chat completion");
+  return { ...parseNvidiaResult(payload), model, provider: "nvidia" };
 }
 
 async function enrichText(text: string, userId: string) {
   const trimmed = text.trim();
   if (!trimmed) throw new TerminalProcessingError("No readable text was found in this source.");
-  if (!Deno.env.get("OPENAI_API_KEY")) return localExtraction(trimmed);
-  const enriched = await callResponses([
-    { type: "input_text", text: `Extract and organize this saved memory:\n\n${trimmed.slice(0, MAX_MODEL_TEXT)}` },
-  ], userId);
+  let enriched: ExtractionResult;
+  if (Deno.env.get("NVIDIA_API_KEY")) {
+    enriched = await callNvidiaChat(`Extract and organize this saved memory:\n\n${trimmed.slice(0, MAX_MODEL_TEXT)}`, NVIDIA_TEXT_MODEL);
+  } else if (Deno.env.get("OPENAI_API_KEY")) {
+    enriched = await callOpenAiResponses([
+      { type: "input_text", text: `Extract and organize this saved memory:\n\n${trimmed.slice(0, MAX_MODEL_TEXT)}` },
+    ], userId);
+  } else {
+    return localExtraction(trimmed);
+  }
   return { ...enriched, extracted_text: trimmed.slice(0, 500_000) };
 }
 
@@ -173,9 +281,141 @@ function bytesToBase64(bytes: Uint8Array) {
   return btoa(binary);
 }
 
+function decodeXmlEntities(value: string) {
+  return value
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/&apos;/gi, "'")
+    .replace(/&#(\d+);/g, (_, code: string) => String.fromCodePoint(Number(code)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, code: string) => String.fromCodePoint(Number.parseInt(code, 16)));
+}
+
+export function officeXmlToText(xml: string) {
+  return decodeXmlEntities(xml
+    .replace(/<w:tab\b[^>]*\/?\s*>/gi, "\t")
+    .replace(/<(?:w:br|a:br)\b[^>]*\/?\s*>/gi, "\n")
+    .replace(/<\/w:tc>/gi, "\t")
+    .replace(/<\/(?:w:p|w:tr|a:p|a:tr)>/gi, "\n")
+    .replace(/<[^>]+>/g, ""))
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function spreadsheetXmlToText(xml: string, sharedStrings: string[]) {
+  const rows = xml.match(/<row\b[\s\S]*?<\/row>/gi) || [];
+  return rows.map((row) => {
+    const cells = row.match(/<c\b[\s\S]*?<\/c>/gi) || [];
+    return cells.map((cell) => {
+      if (/\bt=["']s["']/i.test(cell)) {
+        const index = cell.match(/<v[^>]*>([\s\S]*?)<\/v>/i)?.[1];
+        return index === undefined ? "" : sharedStrings[Number(index)] || "";
+      }
+      const inline = cell.match(/<is\b[\s\S]*?<\/is>/i)?.[0];
+      if (inline) return officeXmlToText(inline);
+      return decodeXmlEntities(cell.match(/<v[^>]*>([\s\S]*?)<\/v>/i)?.[1] || "");
+    }).join("\t").replace(/\t+$/g, "");
+  }).filter(Boolean).join("\n");
+}
+
+async function extractOpenXmlDocument(blob: Blob, mimeType: string) {
+  let entries: Record<string, Uint8Array>;
+  try {
+    entries = unzipSync(new Uint8Array(await blob.arrayBuffer()));
+  } catch {
+    throw new TerminalProcessingError("This Office file is damaged, encrypted, or not a supported Open XML document.");
+  }
+  const decoder = new TextDecoder();
+  const read = (name: string) => entries[name] ? decoder.decode(entries[name]) : "";
+  const names = Object.keys(entries).sort((left, right) => left.localeCompare(right, undefined, { numeric: true }));
+
+  let extracted = "";
+  if (mimeType.includes("wordprocessingml")) {
+    const parts = names.filter((name) => /^word\/(document|header\d*|footer\d*|footnotes|endnotes)\.xml$/i.test(name));
+    extracted = parts.map((name) => officeXmlToText(read(name))).filter(Boolean).join("\n\n");
+  } else if (mimeType.includes("presentationml")) {
+    const slides = names.filter((name) => /^ppt\/slides\/slide\d+\.xml$/i.test(name));
+    extracted = slides.map((name, index) => `Slide ${index + 1}\n${officeXmlToText(read(name))}`).join("\n\n");
+  } else if (mimeType.includes("spreadsheetml")) {
+    const sharedXml = read("xl/sharedStrings.xml");
+    const sharedStrings = (sharedXml.match(/<si\b[\s\S]*?<\/si>/gi) || []).map(officeXmlToText);
+    const sheets = names.filter((name) => /^xl\/worksheets\/sheet\d+\.xml$/i.test(name));
+    extracted = sheets.map((name, index) => `Sheet ${index + 1}\n${spreadsheetXmlToText(read(name), sharedStrings)}`).join("\n\n");
+  }
+
+  if (!extracted.trim()) throw new TerminalProcessingError("No readable text was found in this Office document.");
+  return extracted.slice(0, 500_000);
+}
+
+type NvidiaAsset = { assetId: string; imageUrl: string };
+
+async function createNvidiaImageAsset(blob: Blob, mimeType: string): Promise<NvidiaAsset> {
+  const apiKey = Deno.env.get("NVIDIA_API_KEY");
+  if (!apiKey) throw new TerminalProcessingError("NVIDIA_API_KEY is not configured for image extraction.");
+  if (blob.size <= NVIDIA_INLINE_IMAGE_BYTES) {
+    return { assetId: "", imageUrl: `data:${mimeType};base64,${bytesToBase64(new Uint8Array(await blob.arrayBuffer()))}` };
+  }
+
+  const description = "Neuron private memory image";
+  const createResponse = await fetch("https://api.nvcf.nvidia.com/v2/nvcf/assets", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${apiKey}`, Accept: "application/json", "Content-Type": "application/json" },
+    body: JSON.stringify({ contentType: mimeType, description }),
+  });
+  const createText = await createResponse.text();
+  if (!createResponse.ok) throw nvidiaError("asset creation", createResponse.status, createText);
+  const created = JSON.parse(createText) as { assetId?: string; uploadUrl?: string };
+  if (!created.assetId || !created.uploadUrl) throw new Error("NVIDIA did not return an asset upload URL.");
+
+  const uploadResponse = await fetch(created.uploadUrl, {
+    method: "PUT",
+    headers: { "Content-Type": mimeType, "x-amz-meta-nvcf-asset-description": description },
+    body: blob,
+  });
+  if (!uploadResponse.ok) {
+    await deleteNvidiaAsset(created.assetId, apiKey);
+    throw new Error(`NVIDIA asset upload error ${uploadResponse.status}.`);
+  }
+  return { assetId: created.assetId, imageUrl: `data:${mimeType};asset_id,${created.assetId}` };
+}
+
+async function deleteNvidiaAsset(assetId: string, apiKey: string) {
+  if (!assetId) return;
+  await fetch(`https://api.nvcf.nvidia.com/v2/nvcf/assets/${encodeURIComponent(assetId)}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${apiKey}` },
+  }).catch(() => undefined);
+}
+
 async function processDocument(blob: Blob, memory: Memory) {
   const mimeType = memory.mime_type || blob.type || "application/octet-stream";
   const filename = memory.original_filename || "memory-file";
+  if (OPEN_XML_TYPES.has(mimeType.toLowerCase())) {
+    return enrichText(await extractOpenXmlDocument(blob, mimeType), memory.user_id);
+  }
+  if (mimeType.startsWith("image/") && Deno.env.get("NVIDIA_API_KEY")) {
+    if (!new Set(["image/png", "image/jpeg", "image/jpg"]).has(mimeType.toLowerCase())) {
+      throw new TerminalProcessingError("NVIDIA image extraction currently accepts PNG and JPEG files. Convert this image and retry.");
+    }
+    const asset = await createNvidiaImageAsset(blob, mimeType);
+    try {
+      return await callNvidiaChat([
+        { type: "text", text: "Read this image carefully. Perform OCR where text is present and describe essential visual information." },
+        { type: "image_url", image_url: { url: asset.imageUrl } },
+      ], NVIDIA_VISION_MODEL, asset.assetId || undefined);
+    } finally {
+      if (asset.assetId) await deleteNvidiaAsset(asset.assetId, Deno.env.get("NVIDIA_API_KEY") || "");
+    }
+  }
+
+  if (Deno.env.get("NVIDIA_API_KEY") || !Deno.env.get("OPENAI_API_KEY")) {
+    throw new TerminalProcessingError(
+      "The NVIDIA hosted API cannot read this raw file format. Export it as PNG/JPEG, DOCX, PPTX, XLSX, or plain text and retry.",
+    );
+  }
   const dataUrl = `data:${mimeType};base64,${bytesToBase64(new Uint8Array(await blob.arrayBuffer()))}`;
   const content = mimeType.startsWith("image/")
     ? [
@@ -186,15 +426,31 @@ async function processDocument(blob: Blob, memory: Memory) {
         { type: "input_text", text: "Extract the useful content from this saved file and organize it as a personal memory." },
         { type: "input_file", filename, file_data: dataUrl, detail: "auto" },
       ];
-  return callResponses(content, memory.user_id);
+  return callOpenAiResponses(content, memory.user_id);
 }
 
 async function transcribeAudio(blob: Blob, memory: Memory) {
+  const nvidiaKey = Deno.env.get("NVIDIA_API_KEY");
+  if (nvidiaKey) {
+    const form = new FormData();
+    form.append("file", blob, memory.original_filename || "memory-audio.wav");
+    form.append("language", "en-US");
+    form.append("word_time_offsets", "false");
+    const response = await fetch(NVIDIA_TRANSCRIPTION_URL, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${nvidiaKey}` },
+      body: form,
+    });
+    const payload = await resolveNvidiaResponse(response, nvidiaKey, "transcription") as { text?: unknown };
+    if (typeof payload.text !== "string" || !payload.text.trim()) throw new Error("NVIDIA returned an empty transcript.");
+    return enrichText(payload.text, memory.user_id);
+  }
+
   const apiKey = Deno.env.get("OPENAI_API_KEY");
   if (!apiKey) throw new TerminalProcessingError("OPENAI_API_KEY is not configured for audio transcription.");
   const form = new FormData();
   form.append("file", blob, memory.original_filename || "memory-audio.webm");
-  form.append("model", TRANSCRIPTION_MODEL);
+  form.append("model", OPENAI_TRANSCRIPTION_MODEL);
   form.append("response_format", "json");
   const response = await fetch("https://api.openai.com/v1/audio/transcriptions", {
     method: "POST",

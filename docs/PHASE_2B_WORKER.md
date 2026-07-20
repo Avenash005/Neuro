@@ -6,13 +6,15 @@ The `process-memory` Supabase Edge Function turns queued sources into extracted 
 
 | Source | Processing path |
 | --- | --- |
-| TXT and Markdown | Local text extraction, followed by optional AI enrichment |
+| TXT and Markdown | Local text extraction, followed by NVIDIA enrichment |
 | Web link | Size-limited HTTP(S) fetch with redirect and private-network blocking |
-| Image | Vision/OCR with `gpt-5.6-luna` using original image detail |
-| PDF, DOCX, PPTX, XLSX | Responses API `input_file` extraction with `gpt-5.6-luna` |
-| MP3, M4A/MP4, WAV, WebM | `gpt-4o-mini-transcribe`, followed by enrichment |
+| PNG and JPEG image | NVIDIA Nemotron vision/OCR; large images use temporary private NVCF assets |
+| DOCX, PPTX, XLSX | Local Open XML text extraction, followed by NVIDIA enrichment |
+| PDF and legacy Office formats | Export as PNG/JPEG, a modern Office format, or plain text |
+| English WAV, OGG, OPUS | NVIDIA Parakeet transcription, followed by enrichment |
+| Other audio formats | Optional OpenAI transcription fallback when NVIDIA is not configured |
 
-The model defaults can be changed with `OPENAI_EXTRACTION_MODEL` and `OPENAI_TRANSCRIPTION_MODEL`. Extraction uses `reasoning.effort: none`, structured output, a privacy-preserving safety identifier, and `store: false`.
+When `NVIDIA_API_KEY` is configured, NVIDIA is the primary provider. The default text and vision models can be changed with `NVIDIA_TEXT_MODEL` and `NVIDIA_VISION_MODEL`. OpenAI remains an optional fallback only when NVIDIA is not configured.
 
 ## 1. Apply the worker migration
 
@@ -26,18 +28,19 @@ It adds `extracted_text` and `extracted_at`, atomic queue claiming, completion/f
 
 ## 2. Configure server-only secrets
 
-Create an OpenAI API key from the OpenAI Platform. Do not place it in `.env.local`, frontend variables, source code, or Git.
+Create an NVIDIA hosted-inference key at build.nvidia.com. It normally begins with `nvapi-`. Do not place it in `.env.local`, frontend variables, source code, or Git.
 
 In **Supabase Dashboard → Edge Functions → Secrets**, add:
 
 ```env
-OPENAI_API_KEY=your_server_only_openai_key
-OPENAI_EXTRACTION_MODEL=gpt-5.6-luna
-OPENAI_TRANSCRIPTION_MODEL=gpt-4o-mini-transcribe
+NVIDIA_API_KEY=your_server_only_nvapi_key
+NVIDIA_BASE_URL=https://integrate.api.nvidia.com/v1
+NVIDIA_TEXT_MODEL=nvidia/nemotron-3-nano-30b-a3b
+NVIDIA_VISION_MODEL=nvidia/nemotron-nano-12b-v2-vl
 WORKER_SECRET=a_long_random_value
 ```
 
-The model variables are optional defaults. `OPENAI_API_KEY` is required for images, PDF/Office documents, and audio. Text and readable web pages retain a local extraction fallback if the key is temporarily absent.
+Only `NVIDIA_API_KEY` is required; the model and base URL variables have safe defaults. Text, readable web pages, and modern Office documents retain local extraction when no AI key is configured. `OPENAI_API_KEY`, `OPENAI_EXTRACTION_MODEL`, and `OPENAI_TRANSCRIPTION_MODEL` may be retained as an optional paid fallback when NVIDIA is not configured.
 
 ## 3. Deploy the Edge Function
 
@@ -76,7 +79,7 @@ with JSON `{ "batchSize": 3 }` and the `x-worker-secret` header. Store the secre
 ## Privacy and security boundary
 
 - Source files remain in the private Supabase bucket.
-- The service-role key and OpenAI key exist only in the Edge Function environment.
-- AI-supported source contents are sent to the configured OpenAI API account for processing.
-- Responses are requested with storage disabled, but your organization’s OpenAI data controls and retention settings still apply.
+- The service-role and NVIDIA keys exist only in the Edge Function environment.
+- AI-supported source contents are sent to NVIDIA's hosted endpoint. Large images are uploaded as temporary NVCF assets and deleted after inference.
+- If the optional OpenAI fallback is configured and selected, that provider's account data controls and retention settings apply.
 - URL fetching blocks common private/local destinations, limits redirects and response size, and accepts readable text/HTML only. A production launch should add managed egress filtering and malware scanning.

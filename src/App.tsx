@@ -1,6 +1,6 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { Check } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { User } from "@supabase/supabase-js";
 import { Header, Sidebar } from "./components/layout/AppLayout";
 import { AssistantPanel, CaptureModal, SearchModal } from "./components/overlays/AppOverlays";
@@ -38,6 +38,7 @@ export default function App() {
   const [authUser, setAuthUser] = useState<User | null>(null);
   const [backendStatus, setBackendStatus] = useState<BackendStatus>(isSupabaseConfigured ? "connecting" : "local");
   const [syncedMemories, setSyncedMemories] = useState<MemoryRecord[]>([]);
+  const autoProcessingIds = useRef(new Set<string>());
 
   const search = (query: string) => setSearchQuery(query || DEFAULT_SEARCH);
   const openCapture = () => setCaptureOpen(true);
@@ -74,6 +75,17 @@ export default function App() {
     setAuthUser(user);
     if (user) setBackendStatus("connected");
   }), []);
+
+  useEffect(() => {
+    if (!authUser || backendStatus !== "connected") return;
+    const pending = syncedMemories
+      .filter((memory) => memory.processing_status === "pending" && !autoProcessingIds.current.has(memory.id))
+      .slice(0, 3);
+    for (const memory of pending) {
+      autoProcessingIds.current.add(memory.id);
+      void processSavedMemory(memory.id);
+    }
+  }, [authUser, backendStatus, syncedMemories]);
 
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
