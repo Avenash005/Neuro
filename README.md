@@ -13,7 +13,7 @@ Neuron is a personal knowledge workspace for capturing notes, links, files, and 
 - Private file uploads and owner-only downloads (PDF, image, Office, text, and audio up to 10 MB)
 - Durable URL capture with visible processing state and retry controls
 - Server-side extraction worker for URLs, images/OCR, PDFs, Office files, text, and audio
-- AI summaries and tags stored separately from original source files
+- AI summaries, tags, typed entities, and source-backed relationships stored separately from original source files
 - Owner-only Row Level Security policies
 - Versioned SQL migrations and typed database access
 - Error boundary, unit tests, and GitHub Actions CI
@@ -32,6 +32,7 @@ Activity history and interaction behavior is in [docs/ACTIVITY_HISTORY.md](docs/
 Grounded assistant architecture is in [docs/GROUNDED_ASSISTANT.md](docs/GROUNDED_ASSISTANT.md).
 Persistent favorites and collections are documented in [docs/PERSISTENT_ORGANIZATION.md](docs/PERSISTENT_ORGANIZATION.md).
 Knowledge graph behavior is documented in [docs/KNOWLEDGE_GRAPH.md](docs/KNOWLEDGE_GRAPH.md).
+Entity extraction and provenance are documented in [docs/ENTITY_EXTRACTION.md](docs/ENTITY_EXTRACTION.md).
 
 ## Branches
 
@@ -45,6 +46,7 @@ Knowledge graph behavior is documented in [docs/KNOWLEDGE_GRAPH.md](docs/KNOWLED
 | `feature/grounded-assistant` | Private retrieval-augmented answers with verified citations |
 | `feature/persistent-organization` | Owner-scoped favorites, collections, and memory membership |
 | `feature/knowledge-graph` | Interactive graph generated from private memories and AI tags |
+| `feature/entity-graph` | Typed entity extraction and evidence-backed relationships |
 
 For future work, create focused branches from `phase-2-production`, such as `feature/file-upload`, `feature/semantic-search`, or `fix/mobile-capture`.
 

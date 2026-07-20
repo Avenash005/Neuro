@@ -161,9 +161,9 @@ Exit criteria:
 Goal: turn stored information into useful action.
 
 - [ ] Add AI-generated collection rules (manual collections and membership are now persisted)
-- [ ] Derive people, organizations, technologies, dates, and links
+- [x] Derive people, organizations, technologies, dates, URLs, places, concepts, and source-backed relationships
 - [x] Build an interactive graph from private memories and AI tags
-- [ ] Add a server graph/entity API for deeper relationship extraction
+- [x] Add owner-scoped entity storage and read API for relationship extraction
 - [ ] Generate flashcards and quizzes
 - [ ] Implement spaced-repetition scheduling
 - [ ] Extract tasks and reminders with user confirmation

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { MemoryRecord } from "../../lib/supabase";
+import type { KnowledgeEntityData, MemoryRecord } from "../../lib/supabase";
 import { buildKnowledgeGraph } from "./graphData";
 
 function memory(id: string, title: string, tags: string[] = [], kind: MemoryRecord["kind"] = "Note"): MemoryRecord {
@@ -30,7 +30,7 @@ describe("buildKnowledgeGraph", () => {
     ]);
 
     expect(graph.memoryCount).toBe(2);
-    expect(graph.nodes).toContainEqual(expect.objectContaining({ id: "topic:react", connectionCount: 2 }));
+    expect(graph.nodes).toContainEqual(expect.objectContaining({ id: "topic:react", connectionCount: 3 }));
     expect(graph.edges).toContainEqual(expect.objectContaining({ source: "topic:react", target: "memory:1" }));
     expect(graph.edges).toContainEqual(expect.objectContaining({ source: "topic:react", target: "memory:2" }));
   });
@@ -44,11 +44,31 @@ describe("buildKnowledgeGraph", () => {
 
   it("keeps the graph bounded and deterministic", () => {
     const memories = Array.from({ length: 8 }, (_, index) => memory(String(index + 1), `Memory ${index}`, [`topic-${index}`]));
-    const first = buildKnowledgeGraph(memories, 4, 2);
-    const second = buildKnowledgeGraph(memories, 4, 2);
+    const first = buildKnowledgeGraph(memories, { maxMemories: 4, maxEntities: 2 });
+    const second = buildKnowledgeGraph(memories, { maxMemories: 4, maxEntities: 2 });
 
     expect(first.memoryCount).toBe(4);
-    expect(first.topicCount).toBe(2);
+    expect(first.entityCount).toBe(2);
     expect(first).toEqual(second);
+  });
+
+  it("prefers typed entities and preserves relationship provenance", () => {
+    const entityData: KnowledgeEntityData = {
+      entities: [
+        { id: "person-1", display_name: "Avenash", entity_type: "person" },
+        { id: "tech-1", display_name: "React", entity_type: "technology" },
+      ],
+      memoryEntities: [
+        { memory_id: "1", entity_id: "person-1", confidence: .98, evidence: "Avenash built" },
+        { memory_id: "1", entity_id: "tech-1", confidence: .95, evidence: "with React" },
+      ],
+      relationships: [{ id: "relation-1", memory_id: "1", source_entity_id: "person-1", target_entity_id: "tech-1", relationship_type: "uses", confidence: .91, evidence: "built with React" }],
+    };
+    const graph = buildKnowledgeGraph([memory("1", "Neuron architecture")], { entityData });
+
+    expect(graph.source).toBe("entities");
+    expect(graph.nodes).toContainEqual(expect.objectContaining({ label: "Avenash", entityType: "person" }));
+    expect(graph.relationshipCount).toBe(1);
+    expect(graph.edges).toContainEqual(expect.objectContaining({ kind: "relationship", label: "uses", memoryId: "1", evidence: "built with React" }));
   });
 });

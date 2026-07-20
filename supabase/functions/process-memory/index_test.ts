@@ -43,6 +43,33 @@ Deno.test("parses NVIDIA JSON returned inside a markdown fence", () => {
   assert(result.tags.join(",") === "meeting,calendar", "non-string tags should be removed");
 });
 
+Deno.test("validates typed entities and source-linked relationships", () => {
+  const result = parseNvidiaResult({
+    choices: [{
+      message: {
+        content: JSON.stringify({
+          extracted_text: "Avenash built Neuron with React.",
+          summary: "Avenash used React for Neuron.",
+          tags: ["product"],
+          entities: [
+            { key: "avenash", name: "Avenash", type: "person", confidence: 0.98, evidence: "Avenash built Neuron" },
+            { key: "react", name: "React", type: "technology", confidence: 1.4, evidence: "with React" },
+            { key: "invalid", name: "Guess", type: "animal", confidence: 0.2, evidence: "" },
+          ],
+          relationships: [
+            { source: "avenash", target: "react", type: "uses", confidence: 0.9, evidence: "built Neuron with React" },
+            { source: "avenash", target: "missing", type: "knows", confidence: 0.8, evidence: "unsupported" },
+          ],
+        }),
+      },
+    }],
+  });
+  assert(result.entities.length === 2, "unsupported entity types should be removed");
+  assert(result.entities[1].confidence === 1, "entity confidence should be clamped");
+  assert(result.relationships.length === 1, "relationships must reference validated entity keys");
+  assert(result.relationships[0].type === "uses", "relationship type should be normalized");
+});
+
 Deno.test("extracts readable paragraphs and table cells from Office XML", () => {
   const text = officeXmlToText('<w:document><w:p><w:r><w:t>Avenash &amp; Neuron</w:t></w:r></w:p><w:tr><w:tc><w:p><w:t>Skills</w:t></w:p></w:tc><w:tc><w:p><w:t>React</w:t></w:p></w:tc></w:tr></w:document>');
   assert(text.includes("Avenash & Neuron"), "entities should be decoded");

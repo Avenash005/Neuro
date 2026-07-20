@@ -5,9 +5,10 @@ Neuron's Knowledge Graph is generated from the signed-in user's private Supabase
 ## Graph rules
 
 - Each visible memory becomes a memory node.
-- AI-generated memory tags become normalized topic nodes.
-- Memories sharing a tag connect through the same topic.
-- Memories without processed tags use meaningful title words as a temporary fallback.
+- Typed people, organizations, technologies, dates, URLs, places, and concepts become entity nodes when extraction data is available.
+- Source-backed entity relationships become labeled, clickable edges.
+- Each relationship exposes its evidence, confidence, and source memory.
+- Existing memories without typed extraction continue to use AI tags or meaningful title words as a fallback.
 - The center node represents the current private workspace.
 - The view is deliberately bounded to the 18 newest matching memories and 10 strongest topics so it remains readable and responsive.
 
@@ -19,16 +20,17 @@ The pure graph builder lives in `src/features/graph/graphData.ts`. It is determi
 - Search across titles, summaries, content, and tags.
 - Zoom in, zoom out, and reset the view.
 - Select a node to highlight only its direct connections.
-- Select a topic to see and open its connected memories.
+- Select an entity to see and open its connected source memories.
+- Select a labeled relationship to inspect its evidence and confidence, then open the source memory.
 - Select a memory to review its summary and tags, then open its complete Library detail.
 
 ## Privacy
 
 The graph adds no public table and sends no new data to a third party. It uses the same owner-scoped `memories` query protected by Row Level Security. Only data already returned to the active Neuron session is visualized.
 
-## Next graph phase
+## Entity pipeline
 
-A later server-side entity pipeline can add typed people, organizations, technologies, dates, URLs, and explicit relationships. That phase should preserve source-memory references so every derived edge remains explainable.
+The deployed processing worker extracts typed entities and explicit relationships for newly processed memories. See `docs/ENTITY_EXTRACTION.md` for the database model, validation rules, and rollout behavior.
 
 ## Verification
 

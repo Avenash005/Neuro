@@ -19,6 +19,7 @@ import {
   deleteCollection,
   downloadMemoryFile,
   isSupabaseConfigured,
+  listKnowledgeEntityData,
   listMemories,
   listCollections,
   onAuthChange,
@@ -31,6 +32,8 @@ import {
   type MemoryInput,
   type MemoryRecord,
   type CollectionRecord,
+  EMPTY_KNOWLEDGE_ENTITY_DATA,
+  type KnowledgeEntityData,
 } from "./lib/supabase";
 import type { BackendStatus, View } from "./types/app";
 import type { SignedUploadOptions } from "./lib/signedUpload";
@@ -49,6 +52,7 @@ export default function App() {
   const [backendStatus, setBackendStatus] = useState<BackendStatus>(isSupabaseConfigured ? "connecting" : "local");
   const [syncedMemories, setSyncedMemories] = useState<MemoryRecord[]>([]);
   const [syncedCollections, setSyncedCollections] = useState<CollectionRecord[]>([]);
+  const [knowledgeEntities, setKnowledgeEntities] = useState<KnowledgeEntityData>(EMPTY_KNOWLEDGE_ENTITY_DATA);
   const [openMemoryId, setOpenMemoryId] = useState<string | null>(null);
   const autoProcessingIds = useRef(new Set<string>());
   const activeUserId = useRef<string | null>(null);
@@ -60,9 +64,9 @@ export default function App() {
     if (activeView === "Library") return <LibraryView onSearch={search} openCapture={openCapture} memories={syncedMemories} collections={syncedCollections} onRetry={retryProcessing} onDownload={downloadFile} onDelete={removeMemory} onToggleFavorite={toggleFavorite} onToggleCollection={toggleCollectionMembership} openMemoryId={openMemoryId} onOpenedMemory={() => setOpenMemoryId(null)} />;
     if (activeView === "Activity") return <ActivityView memories={syncedMemories} onOpenMemory={openSearchResult} openCapture={openCapture} />;
     if (activeView === "Collections") return <CollectionsView collections={syncedCollections} memories={syncedMemories} onCreate={createWorkspaceCollection} onDelete={removeWorkspaceCollection} onOpenMemory={openSearchResult} onRemoveMemory={removeCollectionMembership} />;
-    if (activeView === "Graph") return <KnowledgeGraphView memories={syncedMemories} onOpenMemory={openSearchResult} openAssistant={() => setAssistantOpen(true)} />;
+    if (activeView === "Graph") return <KnowledgeGraphView memories={syncedMemories} entityData={knowledgeEntities} onOpenMemory={openSearchResult} openAssistant={() => setAssistantOpen(true)} />;
     return <Dashboard onSearch={search} openCapture={openCapture} openAssistant={() => setAssistantOpen(true)} openActivity={() => setActiveView("Activity")} openLibrary={() => setActiveView("Library")} memories={syncedMemories} onOpenMemory={openSearchResult} onToggleFavorite={toggleFavorite} />;
-  }, [activeView, syncedMemories, syncedCollections, openMemoryId]);
+  }, [activeView, syncedMemories, syncedCollections, knowledgeEntities, openMemoryId]);
 
   useEffect(() => {
     if (!isSupabaseConfigured) return;
@@ -70,16 +74,19 @@ export default function App() {
     const initialize = async () => {
       try {
         const user = await connectSupabase();
-        const [memories, collections] = await Promise.all([listMemories(), listCollections()]);
+        const [memories, collections, entities] = await Promise.all([listMemories(), listCollections(), listKnowledgeEntityData()]);
         if (active) {
           activeUserId.current = user ? user.id : null;
           setAuthUser(user || null);
           setSyncedMemories(memories);
           setSyncedCollections(collections);
+          setKnowledgeEntities(entities);
           setBackendStatus("connected");
           void processMemoryBacklog().then(async (backlog) => {
             if (!active || backlog.processed === 0) return;
-            setSyncedMemories(await listMemories());
+            const [updatedMemories, updatedEntities] = await Promise.all([listMemories(), listKnowledgeEntityData()]);
+            setSyncedMemories(updatedMemories);
+            setKnowledgeEntities(updatedEntities);
           }).catch((backlogError) => console.error("Background processing is unavailable", backlogError));
         }
       } catch (error) {
@@ -97,6 +104,7 @@ export default function App() {
       activeUserId.current = null;
       setSyncedMemories([]);
       setSyncedCollections([]);
+      setKnowledgeEntities(EMPTY_KNOWLEDGE_ENTITY_DATA);
       return;
     }
     setBackendStatus("connected");
@@ -104,10 +112,12 @@ export default function App() {
     activeUserId.current = user.id;
     setSyncedMemories([]);
     setSyncedCollections([]);
-    void Promise.all([listMemories(), listCollections()]).then(([memories, collections]) => {
+    setKnowledgeEntities(EMPTY_KNOWLEDGE_ENTITY_DATA);
+    void Promise.all([listMemories(), listCollections(), listKnowledgeEntityData()]).then(([memories, collections, entities]) => {
       if (activeUserId.current !== user.id) return;
       setSyncedMemories(memories);
       setSyncedCollections(collections);
+      setKnowledgeEntities(entities);
     }).catch((error) => console.error("Could not load the signed-in workspace", error));
   }), []);
 
@@ -152,8 +162,9 @@ export default function App() {
     setSyncedMemories((current) => current.map((memory) => memory.id === memoryId ? { ...memory, processing_status: "processing" } : memory));
     try {
       const result = await processMemoryNow(memoryId);
-      const memories = await listMemories();
+      const [memories, entities] = await Promise.all([listMemories(), listKnowledgeEntityData()]);
       setSyncedMemories(memories);
+      setKnowledgeEntities(entities);
       if (result?.status === "completed") showToast("AI processing complete");
       else if (result?.status === "retry_queued") showToast("Processing will retry automatically");
     } catch (error) {
