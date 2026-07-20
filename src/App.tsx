@@ -16,11 +16,13 @@ import {
   isSupabaseConfigured,
   listMemories,
   onAuthChange,
+  processMemoryBacklog,
   processMemoryNow,
   retryMemoryProcessing,
   DuplicateMemoryError,
   type MemoryInput,
   type MemoryRecord,
+  type MemorySearchResult,
 } from "./lib/supabase";
 import type { BackendStatus, View } from "./types/app";
 import type { SignedUploadOptions } from "./lib/signedUpload";
@@ -38,17 +40,18 @@ export default function App() {
   const [authUser, setAuthUser] = useState<User | null>(null);
   const [backendStatus, setBackendStatus] = useState<BackendStatus>(isSupabaseConfigured ? "connecting" : "local");
   const [syncedMemories, setSyncedMemories] = useState<MemoryRecord[]>([]);
+  const [openMemoryId, setOpenMemoryId] = useState<string | null>(null);
   const autoProcessingIds = useRef(new Set<string>());
 
   const search = (query: string) => setSearchQuery(query || DEFAULT_SEARCH);
   const openCapture = () => setCaptureOpen(true);
 
   const content = useMemo(() => {
-    if (activeView === "Library") return <LibraryView onSearch={search} openCapture={openCapture} memories={syncedMemories} onRetry={retryProcessing} onDownload={downloadFile} onDelete={removeMemory} />;
+    if (activeView === "Library") return <LibraryView onSearch={search} openCapture={openCapture} memories={syncedMemories} onRetry={retryProcessing} onDownload={downloadFile} onDelete={removeMemory} openMemoryId={openMemoryId} onOpenedMemory={() => setOpenMemoryId(null)} />;
     if (activeView === "Collections") return <CollectionsView />;
     if (activeView === "Graph") return <GraphView />;
     return <Dashboard onSearch={search} openCapture={openCapture} openAssistant={() => setAssistantOpen(true)} />;
-  }, [activeView, syncedMemories]);
+  }, [activeView, syncedMemories, openMemoryId]);
 
   useEffect(() => {
     if (!isSupabaseConfigured) return;
@@ -61,6 +64,10 @@ export default function App() {
           setAuthUser(user || null);
           setSyncedMemories(memories);
           setBackendStatus("connected");
+          void processMemoryBacklog().then(async (backlog) => {
+            if (!active || backlog.processed === 0) return;
+            setSyncedMemories(await listMemories());
+          }).catch((backlogError) => console.error("Background processing is unavailable", backlogError));
         }
       } catch (error) {
         console.error("Supabase connection failed", error);
@@ -148,6 +155,13 @@ export default function App() {
     }
   }
 
+  function openSearchResult(memory: MemorySearchResult) {
+    setSyncedMemories((current) => current.some((item) => item.id === memory.id) ? current : [memory, ...current]);
+    setSearchQuery(null);
+    setOpenMemoryId(memory.id);
+    setActiveView("Library");
+  }
+
   const saveMemory = async (memory: MemoryInput, file?: File, uploadOptions?: SignedUploadOptions) => {
     if (!isSupabaseConfigured) {
       showToast("Add your Supabase key to .env.local to save memories");
@@ -159,7 +173,7 @@ export default function App() {
       setCaptureOpen(false);
       setBackendStatus("connected");
       showToast(file ? `“${memory.title}” uploaded privately and queued` : `“${memory.title}” is synced to Supabase`);
-      if (savedMemory.kind !== "Note") void processSavedMemory(savedMemory.id);
+      void processSavedMemory(savedMemory.id);
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") throw error;
       if (error instanceof DuplicateMemoryError) {
@@ -192,7 +206,7 @@ export default function App() {
       <AnimatePresence>
         {(captureOpen || searchQuery !== null) && (
           <motion.div className="modal-layer" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onMouseDown={(event) => { if (event.target === event.currentTarget) { setCaptureOpen(false); setSearchQuery(null); } }}>
-            {captureOpen ? <CaptureModal onClose={() => setCaptureOpen(false)} onSave={saveMemory} /> : <SearchModal query={searchQuery ?? ""} onClose={() => setSearchQuery(null)} />}
+            {captureOpen ? <CaptureModal onClose={() => setCaptureOpen(false)} onSave={saveMemory} /> : <SearchModal query={searchQuery ?? ""} onClose={() => setSearchQuery(null)} onOpenMemory={openSearchResult} />}
           </motion.div>
         )}
       </AnimatePresence>

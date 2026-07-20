@@ -4,6 +4,12 @@ import { createClient } from "npm:@supabase/supabase-js@2.110.7";
 // Supabase's remote function bundler also requires an explicit npm specifier here.
 // deno-lint-ignore no-import-prefix
 import { unzipSync } from "npm:fflate@0.8.2";
+import {
+  createNvidiaEmbedding,
+  embeddingText,
+  NVIDIA_EMBEDDING_MODEL,
+  vectorLiteral,
+} from "../_shared/nvidia-embeddings.ts";
 
 type ProcessingJob = {
   id: string;
@@ -24,6 +30,8 @@ type Memory = {
   storage_path: string | null;
   original_filename: string | null;
   mime_type: string | null;
+  summary: string | null;
+  extracted_text: string | null;
 };
 
 type ExtractionResult = {
@@ -557,16 +565,30 @@ async function loadStoredFile(admin: any, memory: Memory) {
 // deno-lint-ignore no-explicit-any
 async function processJob(admin: any, job: ProcessingJob) {
   const { data: memoryRow, error: memoryError } = await admin.from("memories")
-    .select("id,user_id,title,content,kind,source_url,storage_bucket,storage_path,original_filename,mime_type")
+    .select("id,user_id,title,content,kind,source_url,storage_bucket,storage_path,original_filename,mime_type,summary,extracted_text")
     .eq("id", job.memory_id)
     .single();
   const memory = memoryRow as Memory | null;
   if (memoryError || !memory) throw new TerminalProcessingError(memoryError?.message || "Memory not found.");
 
+  if (job.job_type === "embed") {
+    const passage = embeddingText([memory.title, memory.summary, memory.extracted_text || memory.content]);
+    const embedding = await createNvidiaEmbedding(passage, "passage");
+    const { error: embeddingError } = await admin.rpc("complete_embedding_job", {
+      target_job_id: job.id,
+      embedding_input: vectorLiteral(embedding),
+      embedding_model_name: NVIDIA_EMBEDDING_MODEL,
+    });
+    if (embeddingError) throw new Error(embeddingError.message);
+    return { jobId: job.id, memoryId: job.memory_id, status: "completed", model: NVIDIA_EMBEDDING_MODEL };
+  }
+
   await admin.from("memories").update({ processing_status: "processing" }).eq("id", memory.id);
 
   let result: ExtractionResult;
-  if (job.job_type === "fetch_url") {
+  if (job.job_type === "enrich") {
+    result = await enrichText(memory.content, memory.user_id);
+  } else if (job.job_type === "fetch_url") {
     if (!memory.source_url) throw new TerminalProcessingError("The memory URL is missing.");
     result = await enrichText(await fetchLinkedText(memory.source_url), memory.user_id);
   } else if (job.job_type === "transcribe") {
@@ -589,7 +611,35 @@ async function processJob(admin: any, job: ProcessingJob) {
     },
   });
   if (completeError) throw new Error(completeError.message);
-  return { jobId: job.id, memoryId: job.memory_id, status: "completed", model: result.model };
+
+  let embeddingStatus: "completed" | "queued" = "completed";
+  try {
+    const passage = embeddingText([memory.title, result.summary, result.extracted_text]);
+    const embedding = await createNvidiaEmbedding(passage, "passage");
+    const { error: embeddingError } = await admin.rpc("store_memory_embedding", {
+      target_memory_id: memory.id,
+      target_user_id: memory.user_id,
+      embedding_input: vectorLiteral(embedding),
+      embedding_model_name: NVIDIA_EMBEDDING_MODEL,
+    });
+    if (embeddingError) throw new Error(embeddingError.message);
+  } catch (error) {
+    embeddingStatus = "queued";
+    console.error("Embedding deferred", error instanceof Error ? error.message : "Embedding failed");
+    const { error: queueError } = await admin.from("processing_jobs").upsert({
+      user_id: memory.user_id,
+      memory_id: memory.id,
+      job_type: "embed",
+      status: "queued",
+      attempts: 0,
+      error_message: null,
+      available_at: new Date().toISOString(),
+      locked_at: null,
+    }, { onConflict: "memory_id,job_type" });
+    if (queueError) console.error("Could not queue embedding retry", queueError.message);
+  }
+
+  return { jobId: job.id, memoryId: job.memory_id, status: "completed", model: result.model, embeddingStatus };
 }
 
 export async function handleRequest(request: Request) {
@@ -601,7 +651,7 @@ export async function handleRequest(request: Request) {
     if (!supabaseUrl) throw new TerminalProcessingError("SUPABASE_URL is unavailable.");
     // deno-lint-ignore no-explicit-any
     const admin: any = createClient(supabaseUrl, getSecretKey(), { auth: { persistSession: false, autoRefreshToken: false } });
-    const body = await request.json().catch(() => ({})) as { memoryId?: string; batchSize?: number };
+    const body = await request.json().catch(() => ({})) as { memoryId?: string; batchSize?: number; backfill?: boolean };
     const configuredWorkerSecret = Deno.env.get("WORKER_SECRET") || "";
     const isWorker = await valuesMatch(request.headers.get("x-worker-secret") || "", configuredWorkerSecret);
 
@@ -612,12 +662,12 @@ export async function handleRequest(request: Request) {
       const { data, error } = await admin.auth.getUser(token);
       if (error || !data.user) return jsonResponse({ error: "Invalid session" }, 401);
       userId = data.user.id;
-      if (!body.memoryId) return jsonResponse({ error: "memoryId is required" }, 400);
+      if (!body.memoryId && !body.backfill) return jsonResponse({ error: "memoryId is required" }, 400);
     }
 
     await admin.rpc("recover_stale_processing_jobs");
     const { data: jobs, error: claimError } = await admin.rpc("claim_processing_jobs", {
-      batch_limit: isWorker ? Math.min(Math.max(body.batchSize || 3, 1), 5) : 1,
+      batch_limit: isWorker || body.backfill ? Math.min(Math.max(body.batchSize || 3, 1), 5) : 1,
       target_memory_id: body.memoryId || null,
       target_user_id: userId,
     });

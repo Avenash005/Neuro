@@ -27,6 +27,11 @@ export type MemoryRecord = MemoryInput & {
   extracted_at: string | null;
 };
 
+export type MemorySearchResult = MemoryRecord & {
+  score: number;
+  match: "hybrid" | "meaning" | "keyword";
+};
+
 export class DuplicateMemoryError extends Error {
   readonly existingMemoryId?: string;
 
@@ -161,7 +166,7 @@ export async function createMemory(input: MemoryInput) {
       source_url: sourceUrl,
       content_fingerprint: contentFingerprint,
     })
-    .select("id, title, content, kind, processing_status, created_at, storage_path, original_filename, mime_type, file_size, summary, extracted_text, extracted_at")
+    .select("id, title, content, kind, source_url, processing_status, created_at, storage_path, original_filename, mime_type, file_size, summary, extracted_text, extracted_at")
     .single();
 
   if (error?.code === "23505" && contentFingerprint) throw duplicateRaceError("link");
@@ -174,12 +179,52 @@ export async function listMemories(): Promise<MemoryRecord[]> {
   await ensureUser();
   const { data, error } = await supabase
     .from("memories")
-    .select("id, title, content, kind, processing_status, created_at, storage_path, original_filename, mime_type, file_size, summary, extracted_text, extracted_at")
+    .select("id, title, content, kind, source_url, processing_status, created_at, storage_path, original_filename, mime_type, file_size, summary, extracted_text, extracted_at")
     .order("created_at", { ascending: false })
     .limit(50);
 
   if (error) throw error;
   return data.map(normalizeMemory);
+}
+
+type SearchResponseRow = {
+  id: string;
+  title: string;
+  content: string;
+  kind: string;
+  source_url: string | null;
+  summary: string | null;
+  extracted_text: string | null;
+  processing_status: string;
+  storage_path: string | null;
+  original_filename: string | null;
+  mime_type: string | null;
+  file_size: number | null;
+  extracted_at: string | null;
+  created_at: string;
+  search_score: number;
+  keyword_rank: number | null;
+  semantic_rank: number | null;
+};
+
+export async function searchMemories(query: string, limit = 12): Promise<MemorySearchResult[]> {
+  if (!supabase) return [];
+  await ensureUser();
+  const { data, error } = await supabase.functions.invoke("search-memories", {
+    body: { query, limit },
+  });
+  if (error) throw new Error(error.message);
+  if (data?.error) throw new Error(data.error);
+  const rows = Array.isArray(data?.results) ? data.results as SearchResponseRow[] : [];
+  return rows.map((row) => ({
+    ...normalizeMemory({
+      ...row,
+      source_url: row.source_url,
+    }),
+    sourceUrl: row.source_url ?? undefined,
+    score: Number(row.search_score) || 0,
+    match: row.keyword_rank && row.semantic_rank ? "hybrid" : row.semantic_rank ? "meaning" : "keyword",
+  }));
 }
 
 export async function createFileMemory(file: File, title: string, uploadOptions: SignedUploadOptions = {}) {
@@ -226,7 +271,7 @@ export async function createFileMemory(file: File, title: string, uploadOptions:
         file_size: file.size,
         content_fingerprint: contentFingerprint,
       })
-      .select("id, title, content, kind, processing_status, created_at, storage_path, original_filename, mime_type, file_size, summary, extracted_text, extracted_at")
+      .select("id, title, content, kind, source_url, processing_status, created_at, storage_path, original_filename, mime_type, file_size, summary, extracted_text, extracted_at")
       .single();
 
     if (error?.code === "23505") throw duplicateRaceError("file");
@@ -252,6 +297,16 @@ export async function processMemoryNow(memoryId: string) {
   const result = data?.results?.[0] as { status?: string; error?: string } | undefined;
   if (result?.status === "failed") throw new Error(result.error || "AI processing failed.");
   return result;
+}
+
+export async function processMemoryBacklog(batchSize = 5) {
+  if (!supabase) return { processed: 0, results: [] };
+  await ensureUser();
+  const { data, error } = await supabase.functions.invoke("process-memory", {
+    body: { backfill: true, batchSize },
+  });
+  if (error) throw error;
+  return data as { processed: number; results: Array<{ status?: string; error?: string }> };
 }
 
 export async function downloadMemoryFile(path: string, filename: string) {
@@ -284,7 +339,9 @@ export async function deleteMemory(memoryId: string, storagePath: string | null)
   }, memoryId, storagePath);
 }
 
-type MemoryRow = Pick<Database["public"]["Tables"]["memories"]["Row"], "id" | "title" | "content" | "kind" | "processing_status" | "created_at" | "storage_path" | "original_filename" | "mime_type" | "file_size" | "summary" | "extracted_text" | "extracted_at">;
+type MemoryRow = Pick<Database["public"]["Tables"]["memories"]["Row"], "id" | "title" | "content" | "kind" | "processing_status" | "created_at" | "storage_path" | "original_filename" | "mime_type" | "file_size" | "summary" | "extracted_text" | "extracted_at"> & {
+  source_url?: string | null;
+};
 
 export function normalizeMemory(memory: MemoryRow): MemoryRecord {
   const normalizedKind = `${memory.kind.charAt(0).toUpperCase()}${memory.kind.slice(1)}`;
@@ -299,6 +356,7 @@ export function normalizeMemory(memory: MemoryRow): MemoryRecord {
     title: memory.title,
     content: memory.content,
     kind,
+    sourceUrl: memory.source_url ?? undefined,
     processing_status: processingStatus,
     created_at: memory.created_at,
     storage_path: memory.storage_path,

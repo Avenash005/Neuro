@@ -22,6 +22,10 @@ export type Database = {
           file_size: number | null;
           extracted_text: string | null;
           extracted_at: string | null;
+          embedding: string | null;
+          embedding_model: string | null;
+          embedded_at: string | null;
+          search_document: string | null;
           content_fingerprint: string | null;
           created_at: string;
           updated_at: string;
@@ -44,6 +48,9 @@ export type Database = {
           file_size?: number | null;
           extracted_text?: string | null;
           extracted_at?: string | null;
+          embedding?: string | null;
+          embedding_model?: string | null;
+          embedded_at?: string | null;
           content_fingerprint?: string | null;
           created_at?: string;
           updated_at?: string;
@@ -66,6 +73,9 @@ export type Database = {
           file_size?: number | null;
           extracted_text?: string | null;
           extracted_at?: string | null;
+          embedding?: string | null;
+          embedding_model?: string | null;
+          embedded_at?: string | null;
           content_fingerprint?: string | null;
           created_at?: string;
           updated_at?: string;
@@ -153,6 +163,36 @@ export type Database = {
       recover_stale_processing_jobs: {
         Args: Record<string, never>;
         Returns: number;
+      };
+      store_memory_embedding: {
+        Args: { target_memory_id: string; target_user_id: string; embedding_input: string; embedding_model_name: string };
+        Returns: undefined;
+      };
+      complete_embedding_job: {
+        Args: { target_job_id: string; embedding_input: string; embedding_model_name: string };
+        Returns: undefined;
+      };
+      hybrid_search_memories: {
+        Args: { target_user_id: string; query_text: string; query_embedding_text?: string | null; match_count?: number; kind_filter?: string | null };
+        Returns: Array<{
+          id: string;
+          title: string;
+          content: string;
+          kind: string;
+          source_url: string | null;
+          summary: string | null;
+          extracted_text: string | null;
+          processing_status: string;
+          storage_path: string | null;
+          original_filename: string | null;
+          mime_type: string | null;
+          file_size: number | null;
+          extracted_at: string | null;
+          created_at: string;
+          search_score: number;
+          keyword_rank: number | null;
+          semantic_rank: number | null;
+        }>;
       };
     };
     Enums: Record<string, never>;

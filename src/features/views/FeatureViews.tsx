@@ -30,6 +30,8 @@ type LibraryViewProps = {
   onRetry: (memoryId: string) => Promise<void>;
   onDownload: (path: string, filename: string) => Promise<void>;
   onDelete: (memory: MemoryRecord) => Promise<void>;
+  openMemoryId?: string | null;
+  onOpenedMemory?: () => void;
 };
 
 type LibrarySelection = {
@@ -37,9 +39,8 @@ type LibrarySelection = {
   memory?: MemoryRecord;
 };
 
-export function LibraryView({ onSearch, openCapture, memories, onRetry, onDownload, onDelete }: LibraryViewProps) {
-  const [selection, setSelection] = useState<LibrarySelection | null>(null);
-  const syncedItems: LibraryItem[] = memories.map((memory) => ({
+function memoryToLibraryItem(memory: MemoryRecord): LibraryItem {
+  return {
     id: memory.id,
     title: memory.title,
     description: memory.summary || memory.content || memory.extracted_text?.slice(0, 180) || (memory.original_filename ? `${memory.original_filename} · ${memory.file_size ? formatFileSize(memory.file_size) : "Private file"}` : `${memory.kind} captured in Neuron`),
@@ -50,7 +51,12 @@ export function LibraryView({ onSearch, openCapture, memories, onRetry, onDownlo
     processingStatus: memory.processing_status,
     storagePath: memory.storage_path ?? undefined,
     originalFilename: memory.original_filename ?? undefined,
-  }));
+  };
+}
+
+export function LibraryView({ onSearch, openCapture, memories, onRetry, onDownload, onDelete, openMemoryId, onOpenedMemory }: LibraryViewProps) {
+  const [selection, setSelection] = useState<LibrarySelection | null>(null);
+  const syncedItems: LibraryItem[] = memories.map(memoryToLibraryItem);
   const allItems = [
     ...syncedItems,
     ...recentItems,
@@ -66,6 +72,14 @@ export function LibraryView({ onSearch, openCapture, memories, onRetry, onDownlo
     window.addEventListener("keydown", closeOnEscape);
     return () => window.removeEventListener("keydown", closeOnEscape);
   }, [selection]);
+
+  useEffect(() => {
+    if (!openMemoryId) return;
+    const memory = memories.find((candidate) => candidate.id === openMemoryId);
+    if (!memory) return;
+    setSelection({ item: memoryToLibraryItem(memory), memory });
+    onOpenedMemory?.();
+  }, [memories, onOpenedMemory, openMemoryId]);
 
   return (
     <>
