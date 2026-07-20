@@ -213,7 +213,7 @@ export default function App() {
       </AnimatePresence>
 
       <AnimatePresence>
-        {assistantOpen && <><motion.div className="panel-backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setAssistantOpen(false)} /><AssistantPanel onClose={() => setAssistantOpen(false)} /></>}
+        {assistantOpen && <><motion.div className="panel-backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setAssistantOpen(false)} /><AssistantPanel onClose={() => setAssistantOpen(false)} onOpenMemory={(memory) => { setAssistantOpen(false); openSearchResult(memory); }} /></>}
       </AnimatePresence>
 
       <AnimatePresence>

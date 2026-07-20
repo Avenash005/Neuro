@@ -20,6 +20,7 @@ Neuron is a personal knowledge workspace for capturing notes, links, files, and 
 - Live private hybrid search across exact terms and semantic meaning
 - Private Activity page with 7-day, 30-day, and all-time work history
 - Functional navigation, Library filters, collection creation, favorites, and history links
+- Grounded Ask Neuron answers with validated, clickable private-memory citations
 - Strict TypeScript and production builds
 
 The production roadmap is in [docs/PRODUCTION_PLAN.md](docs/PRODUCTION_PLAN.md).
@@ -28,6 +29,7 @@ Phase 2B capture setup is in [docs/PHASE_2B_SETUP.md](docs/PHASE_2B_SETUP.md).
 Phase 2B worker deployment is in [docs/PHASE_2B_WORKER.md](docs/PHASE_2B_WORKER.md).
 Phase 2C hybrid search is in [docs/PHASE_2C_SEARCH.md](docs/PHASE_2C_SEARCH.md).
 Activity history and interaction behavior is in [docs/ACTIVITY_HISTORY.md](docs/ACTIVITY_HISTORY.md).
+Grounded assistant architecture is in [docs/GROUNDED_ASSISTANT.md](docs/GROUNDED_ASSISTANT.md).
 
 ## Branches
 
@@ -38,6 +40,7 @@ Activity history and interaction behavior is in [docs/ACTIVITY_HISTORY.md](docs/
 | `feature/universal-capture` | Completed Phase 2B private capture milestone |
 | `feature/semantic-search` | Completed Phase 2C full-text, vector, and hybrid retrieval milestone |
 | `feature/activity-history` | Activity timeline and complete UI interaction pass |
+| `feature/grounded-assistant` | Private retrieval-augmented answers with verified citations |
 
 For future work, create focused branches from `phase-2-production`, such as `feature/file-upload`, `feature/semantic-search`, or `fix/mobile-capture`.
 
@@ -67,6 +70,7 @@ supabase/
 
 docs/
 ├── ACTIVITY_HISTORY.md     # Past-work page and interaction map
+├── GROUNDED_ASSISTANT.md   # Private AI answers and citation validation
 ├── PHASE_2A_SETUP.md       # Required Supabase dashboard configuration
 ├── PHASE_2B_WORKER.md      # NVIDIA processing worker deployment
 ├── PHASE_2C_SEARCH.md      # Hybrid-search architecture and deployment
@@ -138,6 +142,7 @@ These commands run frontend type-checking, unit tests, the production build, and
 - Change database schema or security policies: `supabase/schema.sql`
 - Change ingestion/AI processing: `supabase/functions/process-memory/index.ts`
 - Change private hybrid search: `supabase/functions/search-memories/index.ts`
+- Change grounded AI answers: `supabase/functions/ask-neuron/index.ts`
 - Change temporary demo content: `src/data/mockData.ts`
 - Change colors and layout: `src/index.css`
 

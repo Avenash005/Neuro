@@ -146,7 +146,7 @@ Goal: return grounded answers from the user’s own memory.
 - [x] Implement hybrid retrieval with reciprocal-rank fusion
 - [ ] Add filters for type, collection, date, project, and people
 - [ ] Add streaming assistant responses
-- [ ] Attach source citations to every generated answer
+- [x] Attach validated source citations to every generated answer
 - [ ] Add model-provider abstraction and per-user preferences
 - [ ] Add prompt/version tracking and evaluation datasets
 

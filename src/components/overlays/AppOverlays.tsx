@@ -13,7 +13,7 @@ import {
   X,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { searchMemories, type MemoryInput, type MemorySearchResult } from "../../lib/supabase";
+import { askNeuron, searchMemories, type AssistantAnswer, type MemoryInput, type MemoryRecord, type MemorySearchResult } from "../../lib/supabase";
 import type { SignedUploadOptions } from "../../lib/signedUpload";
 import { formatFileSize, validateUpload } from "../../lib/uploads";
 
@@ -177,14 +177,33 @@ export function SearchModal({ query, onClose, onOpenMemory }: {
   );
 }
 
-export function AssistantPanel({ onClose }: { onClose: () => void }) {
+export function AssistantPanel({ onClose, onOpenMemory }: { onClose: () => void; onOpenMemory: (memory: MemoryRecord) => void }) {
   const [message, setMessage] = useState("");
-  const [sent, setSent] = useState(false);
+  const [question, setQuestion] = useState("");
+  const [response, setResponse] = useState<AssistantAnswer | null>(null);
+  const [asking, setAsking] = useState(false);
+  const [assistantError, setAssistantError] = useState<string | null>(null);
+  const runQuestion = async (nextQuestion: string) => {
+    const normalized = nextQuestion.trim();
+    if (normalized.length < 3 || asking) return;
+    setQuestion(normalized);
+    setMessage("");
+    setResponse(null);
+    setAssistantError(null);
+    setAsking(true);
+    try {
+      setResponse(await askNeuron(normalized));
+    } catch (error) {
+      setAssistantError(error instanceof Error ? error.message : "Neuron could not answer right now.");
+    } finally {
+      setAsking(false);
+    }
+  };
   return (
     <motion.aside className="assistant-panel" initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }} transition={{ type: "spring", damping: 28, stiffness: 280 }}>
       <div className="assistant-head"><div><span className="assistant-logo"><Brain size={19} /></span><span><strong>Neuron</strong><small>Your personal thinking partner</small></span></div><button className="icon-button" onClick={onClose}><X size={19} /></button></div>
-      <div className="assistant-body"><div className="assistant-intro"><span><Sparkles size={18} /></span><h2>What are we thinking about?</h2><p>I can search, connect, summarize and build on everything you’ve saved.</p></div><div className="suggestions">{["Summarize what I learned this week", "Connect my notes about offline apps", "Turn recent notes into a project plan"].map((text) => <button key={text} onClick={() => setMessage(text)}>{text}<ArrowRight size={14} /></button>)}</div>{sent && <div className="chat-bubble"><p>{message}</p><span>Thinking across your memories…</span></div>}</div>
-      <form className="assistant-input" onSubmit={(event) => { event.preventDefault(); if (message) setSent(true); }}><textarea value={message} onChange={(event) => { setMessage(event.target.value); setSent(false); }} placeholder="Ask Neuron..." /><div><button type="button" aria-label="Use recent voice memories" title="Use recent voice memories" onClick={() => { setMessage("Summarize my recent voice memories"); setSent(false); }}><Mic size={17} /></button><button className="send" type="submit" aria-label="Send to Neuron"><ArrowRight size={17} /></button></div></form>
+      <div className="assistant-body"><div className="assistant-intro"><span><Sparkles size={18} /></span><h2>What are we thinking about?</h2><p>I answer from your private memories and show exactly which ones I used.</p></div>{!question && <div className="suggestions">{["Summarize what I learned this week", "Connect my notes about offline apps", "Turn recent notes into a project plan"].map((text) => <button key={text} onClick={() => void runQuestion(text)}>{text}<ArrowRight size={14} /></button>)}</div>}{question && <div className="assistant-conversation"><div className="chat-bubble"><p>{question}</p></div>{asking && <div className="assistant-thinking"><LoaderCircle size={17} /><span>Reading your memories…</span></div>}{assistantError && <div className="assistant-answer error"><strong>Neuron couldn’t answer</strong><p>{assistantError}</p><button onClick={() => void runQuestion(question)}>Try again</button></div>}{response && <div className="assistant-answer"><div className="assistant-answer-label"><Sparkles size={14} /> Grounded answer</div><p>{response.answer}</p>{response.citations.length > 0 && <div className="assistant-citations"><span>Sources</span>{response.citations.map(({ number, memory }) => <button key={`${number}-${memory.id}`} onClick={() => onOpenMemory(memory)}><em>[{number}]</em><span><strong>{memory.title}</strong><small>{memory.kind} · Open memory</small></span><ArrowRight size={14} /></button>)}</div>}<small className="assistant-model">Answer generated only from the sources above</small></div>}</div>}</div>
+      <form className="assistant-input" onSubmit={(event) => { event.preventDefault(); void runQuestion(message); }}><textarea value={message} disabled={asking} onChange={(event) => setMessage(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void runQuestion(message); } }} placeholder={question ? "Ask a follow-up..." : "Ask Neuron..."} /><div><button type="button" aria-label="Use recent voice memories" title="Use recent voice memories" onClick={() => setMessage("Summarize my recent voice memories")}><Mic size={17} /></button><button className="send" type="submit" aria-label="Send to Neuron" disabled={asking || message.trim().length < 3}>{asking ? <LoaderCircle size={17} /> : <ArrowRight size={17} />}</button></div></form>
     </motion.aside>
   );
 }
