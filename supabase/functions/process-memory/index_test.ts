@@ -29,6 +29,7 @@ Deno.test("provides a deterministic local extraction fallback", () => {
   assert(result.summary === "A useful idea. With context.", "summary should normalize whitespace");
   assert(result.provider === "local", "fallback provider should be local");
   assert(result.action_items.length === 0, "local extraction must not invent action items");
+  assert(result.study_cards.length === 0, "local extraction must not invent study cards");
 });
 
 Deno.test("parses NVIDIA JSON returned inside a markdown fence", () => {
@@ -87,6 +88,22 @@ Deno.test("validates and deduplicates explicit action items", () => {
   assert(result.action_items.length === 1, "duplicate and unsupported action items should be removed");
   assert(result.action_items[0].confidence === 1, "action confidence should be clamped");
   assert(result.action_items[0].due_at === "2026-07-21T09:30:00.000Z", "explicit due dates should be normalized");
+});
+
+Deno.test("validates source-backed study cards and quiz options", () => {
+  const result = parseNvidiaResult({ choices: [{ message: { content: JSON.stringify({
+    extracted_text: "React uses a virtual DOM to efficiently update browser interfaces.",
+    summary: "React rendering notes.",
+    tags: ["react"], entities: [], relationships: [], action_items: [],
+    study_cards: [
+      { question: "What does React use to efficiently update interfaces?", answer: "A virtual DOM", distractors: ["A physical DOM", "A virtual DOM", "A SQL view", "A compiler", "An extra option"], confidence: 1.4, evidence: "uses a virtual DOM" },
+      { question: " what does react use to efficiently update interfaces? ", answer: "Duplicate", distractors: [], confidence: 0.5, evidence: "" },
+      { question: "", answer: "Invalid", distractors: [], confidence: 0.5, evidence: "" },
+    ],
+  }) } }] });
+  assert(result.study_cards.length === 1, "duplicate and empty study cards should be removed");
+  assert(result.study_cards[0].distractors.length === 3, "distractors should exclude the answer and be capped");
+  assert(result.study_cards[0].confidence === 1, "study-card confidence should be clamped");
 });
 
 Deno.test("extracts readable paragraphs and table cells from Office XML", () => {
