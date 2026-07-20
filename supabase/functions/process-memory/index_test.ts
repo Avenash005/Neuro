@@ -1,4 +1,4 @@
-import { blockedHostname, handleRequest, htmlToText, localExtraction, validatedExternalUrl } from "./index.ts";
+import { blockedHostname, handleRequest, htmlToText, localExtraction, officeXmlToText, parseNvidiaResult, validatedExternalUrl } from "./index.ts";
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
@@ -28,6 +28,26 @@ Deno.test("provides a deterministic local extraction fallback", () => {
   assert(result.extracted_text === "A useful idea.\n\nWith context.", "source text should be preserved");
   assert(result.summary === "A useful idea. With context.", "summary should normalize whitespace");
   assert(result.provider === "local", "fallback provider should be local");
+});
+
+Deno.test("parses NVIDIA JSON returned inside a markdown fence", () => {
+  const result = parseNvidiaResult({
+    choices: [{
+      message: {
+        content: '```json\n{"extracted_text":"Meeting at 3 PM","summary":"A meeting is scheduled.","tags":["meeting",7,"calendar"]}\n```',
+      },
+    }],
+  });
+  assert(result.extracted_text === "Meeting at 3 PM", "extracted text should be parsed");
+  assert(result.summary === "A meeting is scheduled.", "summary should be parsed");
+  assert(result.tags.join(",") === "meeting,calendar", "non-string tags should be removed");
+});
+
+Deno.test("extracts readable paragraphs and table cells from Office XML", () => {
+  const text = officeXmlToText('<w:document><w:p><w:r><w:t>Avenash &amp; Neuron</w:t></w:r></w:p><w:tr><w:tc><w:p><w:t>Skills</w:t></w:p></w:tc><w:tc><w:p><w:t>React</w:t></w:p></w:tc></w:tr></w:document>');
+  assert(text.includes("Avenash & Neuron"), "entities should be decoded");
+  assert(text.includes("Skills"), "table labels should be extracted");
+  assert(text.includes("React"), "table values should be extracted");
 });
 
 Deno.test("allows the Supabase client header during browser preflight", async () => {

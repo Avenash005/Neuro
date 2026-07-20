@@ -1,5 +1,7 @@
 {
+  "nodeModulesDir": "auto",
   "imports": {
-    "@supabase/supabase-js": "npm:@supabase/supabase-js@2"
+    "@supabase/supabase-js": "npm:@supabase/supabase-js@2",
+    "fflate": "npm:fflate@0.8.2"
   }
 }
