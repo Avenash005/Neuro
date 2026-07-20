@@ -39,6 +39,39 @@ export type CollectionRecord = {
   memory_ids: string[];
 };
 
+export type EntityType = "person" | "organization" | "technology" | "date" | "url" | "place" | "concept";
+
+export type KnowledgeEntityRecord = {
+  id: string;
+  display_name: string;
+  entity_type: EntityType;
+};
+
+export type MemoryEntityRecord = {
+  memory_id: string;
+  entity_id: string;
+  confidence: number;
+  evidence: string;
+};
+
+export type EntityRelationshipRecord = {
+  id: string;
+  memory_id: string;
+  source_entity_id: string;
+  target_entity_id: string;
+  relationship_type: string;
+  confidence: number;
+  evidence: string;
+};
+
+export type KnowledgeEntityData = {
+  entities: KnowledgeEntityRecord[];
+  memoryEntities: MemoryEntityRecord[];
+  relationships: EntityRelationshipRecord[];
+};
+
+export const EMPTY_KNOWLEDGE_ENTITY_DATA: KnowledgeEntityData = { entities: [], memoryEntities: [], relationships: [] };
+
 export type MemorySearchResult = MemoryRecord & {
   score: number;
   match: "hybrid" | "meaning" | "keyword";
@@ -223,6 +256,24 @@ export async function listCollections(): Promise<CollectionRecord[]> {
     ...collection,
     memory_ids: membershipRows.filter((membership) => membership.collection_id === collection.id).map((membership) => membership.memory_id),
   }));
+}
+
+export async function listKnowledgeEntityData(): Promise<KnowledgeEntityData> {
+  if (!supabase) return EMPTY_KNOWLEDGE_ENTITY_DATA;
+  await ensureUser();
+  const [entityResult, memoryEntityResult, relationshipResult] = await Promise.all([
+    supabase.from("entities").select("id, display_name, entity_type"),
+    supabase.from("memory_entities").select("memory_id, entity_id, confidence, evidence"),
+    supabase.from("entity_relationships").select("id, memory_id, source_entity_id, target_entity_id, relationship_type, confidence, evidence"),
+  ]);
+  if (entityResult.error) throw entityResult.error;
+  if (memoryEntityResult.error) throw memoryEntityResult.error;
+  if (relationshipResult.error) throw relationshipResult.error;
+  return {
+    entities: entityResult.data as KnowledgeEntityRecord[],
+    memoryEntities: memoryEntityResult.data,
+    relationships: relationshipResult.data,
+  };
 }
 
 export async function createCollection(name: string, description = "", color = "#6657d9"): Promise<CollectionRecord> {

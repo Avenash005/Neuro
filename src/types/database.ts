@@ -134,6 +134,24 @@ export type Database = {
         Update: Record<string, never>;
         Relationships: [];
       };
+      entities: {
+        Row: { id: string; user_id: string; display_name: string; normalized_name: string; entity_type: string; created_at: string; updated_at: string };
+        Insert: { id?: string; user_id: string; display_name: string; normalized_name: string; entity_type: string; created_at?: string; updated_at?: string };
+        Update: { display_name?: string; normalized_name?: string; entity_type?: string; updated_at?: string };
+        Relationships: [];
+      };
+      memory_entities: {
+        Row: { memory_id: string; entity_id: string; user_id: string; confidence: number; evidence: string; created_at: string };
+        Insert: { memory_id: string; entity_id: string; user_id: string; confidence?: number; evidence?: string; created_at?: string };
+        Update: { confidence?: number; evidence?: string };
+        Relationships: [];
+      };
+      entity_relationships: {
+        Row: { id: string; user_id: string; memory_id: string; source_entity_id: string; target_entity_id: string; relationship_type: string; confidence: number; evidence: string; created_at: string };
+        Insert: { id?: string; user_id: string; memory_id: string; source_entity_id: string; target_entity_id: string; relationship_type: string; confidence?: number; evidence?: string; created_at?: string };
+        Update: { relationship_type?: string; confidence?: number; evidence?: string };
+        Relationships: [];
+      };
       profiles: {
         Row: {
           id: string;
@@ -178,6 +196,10 @@ export type Database = {
       recover_stale_processing_jobs: {
         Args: Record<string, never>;
         Returns: number;
+      };
+      replace_memory_graph: {
+        Args: { target_job_id: string; result_entities?: Json; result_relationships?: Json };
+        Returns: undefined;
       };
       store_memory_embedding: {
         Args: { target_memory_id: string; target_user_id: string; embedding_input: string; embedding_model_name: string };

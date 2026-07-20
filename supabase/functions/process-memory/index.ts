@@ -38,8 +38,28 @@ type ExtractionResult = {
   extracted_text: string;
   summary: string;
   tags: string[];
+  entities: ExtractedEntity[];
+  relationships: ExtractedRelationship[];
   model: string;
   provider: "nvidia" | "openai" | "local";
+};
+
+type EntityType = "person" | "organization" | "technology" | "date" | "url" | "place" | "concept";
+
+type ExtractedEntity = {
+  key: string;
+  name: string;
+  type: EntityType;
+  confidence: number;
+  evidence: string;
+};
+
+type ExtractedRelationship = {
+  source: string;
+  target: string;
+  type: string;
+  confidence: number;
+  evidence: string;
 };
 
 const corsHeaders = {
@@ -109,6 +129,8 @@ export function localExtraction(text: string): ExtractionResult {
     extracted_text: text.trim(),
     summary: normalized.slice(0, 280),
     tags: [],
+    entities: [],
+    relationships: [],
     model: "local-text-extractor",
     provider: "local",
   };
@@ -118,10 +140,49 @@ function validatedExtraction(parsed: Partial<ExtractionResult>): Omit<Extraction
   if (typeof parsed.extracted_text !== "string" || typeof parsed.summary !== "string" || !Array.isArray(parsed.tags)) {
     throw new Error("The AI provider returned an invalid extraction result.");
   }
+  const allowedTypes = new Set<EntityType>(["person", "organization", "technology", "date", "url", "place", "concept"]);
+  const entityKeys = new Set<string>();
+  const entityIdentities = new Set<string>();
+  const entities = (Array.isArray(parsed.entities) ? parsed.entities : []).flatMap((candidate) => {
+    if (!candidate || typeof candidate !== "object") return [];
+    const value = candidate as Partial<ExtractedEntity>;
+    const key = typeof value.key === "string" ? value.key.trim().replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 80) : "";
+    const name = typeof value.name === "string" ? value.name.trim().slice(0, 160) : "";
+    const type = typeof value.type === "string" ? value.type.toLowerCase() as EntityType : "concept";
+    const identity = `${type}:${name.toLowerCase().replace(/\s+/g, " ")}`;
+    if (!key || !name || !allowedTypes.has(type) || entityKeys.has(key) || entityIdentities.has(identity)) return [];
+    entityKeys.add(key);
+    entityIdentities.add(identity);
+    return [{
+      key,
+      name,
+      type,
+      confidence: typeof value.confidence === "number" && Number.isFinite(value.confidence) ? Math.max(0, Math.min(1, value.confidence)) : 0.7,
+      evidence: typeof value.evidence === "string" ? value.evidence.trim().slice(0, 300) : "",
+    }];
+  }).slice(0, 20);
+  const validKeys = new Set(entities.map((entity) => entity.key));
+  const relationships = (Array.isArray(parsed.relationships) ? parsed.relationships : []).flatMap((candidate) => {
+    if (!candidate || typeof candidate !== "object") return [];
+    const value = candidate as Partial<ExtractedRelationship>;
+    const source = typeof value.source === "string" ? value.source.trim().slice(0, 80) : "";
+    const target = typeof value.target === "string" ? value.target.trim().slice(0, 80) : "";
+    const type = typeof value.type === "string" ? value.type.trim().toLowerCase().replace(/\s+/g, "_").slice(0, 80) : "";
+    if (!validKeys.has(source) || !validKeys.has(target) || source === target || !type) return [];
+    return [{
+      source,
+      target,
+      type,
+      confidence: typeof value.confidence === "number" && Number.isFinite(value.confidence) ? Math.max(0, Math.min(1, value.confidence)) : 0.7,
+      evidence: typeof value.evidence === "string" ? value.evidence.trim().slice(0, 300) : "",
+    }];
+  }).slice(0, 30);
   return {
     extracted_text: parsed.extracted_text.slice(0, 500_000),
     summary: parsed.summary.slice(0, 800),
     tags: parsed.tags.filter((tag): tag is string => typeof tag === "string").map((tag) => tag.slice(0, 60)).slice(0, 8),
+    entities,
+    relationships,
   };
 }
 
@@ -183,8 +244,42 @@ async function callOpenAiResponses(content: Record<string, unknown>[], userId: s
               extracted_text: { type: "string", description: "Faithful extracted or transcribed content." },
               summary: { type: "string", description: "A concise factual summary under 120 words." },
               tags: { type: "array", maxItems: 8, items: { type: "string" } },
+              entities: {
+                type: "array",
+                maxItems: 20,
+                description: "Only explicit entities supported by the source. Use stable short keys for relationship references.",
+                items: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    key: { type: "string" },
+                    name: { type: "string" },
+                    type: { type: "string", enum: ["person", "organization", "technology", "date", "url", "place", "concept"] },
+                    confidence: { type: "number", minimum: 0, maximum: 1 },
+                    evidence: { type: "string", description: "A short exact supporting phrase from the source." },
+                  },
+                  required: ["key", "name", "type", "confidence", "evidence"],
+                },
+              },
+              relationships: {
+                type: "array",
+                maxItems: 30,
+                description: "Explicit relationships between entity keys, supported by the source.",
+                items: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    source: { type: "string" },
+                    target: { type: "string" },
+                    type: { type: "string" },
+                    confidence: { type: "number", minimum: 0, maximum: 1 },
+                    evidence: { type: "string", description: "A short exact supporting phrase from the source." },
+                  },
+                  required: ["source", "target", "type", "confidence", "evidence"],
+                },
+              },
             },
-            required: ["extracted_text", "summary", "tags"],
+            required: ["extracted_text", "summary", "tags", "entities", "relationships"],
           },
         },
       },
@@ -229,8 +324,8 @@ async function resolveNvidiaResponse(response: Response, apiKey: string, label: 
 }
 
 const NVIDIA_JSON_INSTRUCTIONS = `Return only valid JSON with exactly these keys:
-{"extracted_text":"faithful extracted or transcribed content","summary":"concise factual summary under 120 words","tags":["up to 8 short tags"]}
-Preserve important names, dates, links, headings, and actionable details. Do not invent missing content.`;
+{"extracted_text":"faithful extracted or transcribed content","summary":"concise factual summary under 120 words","tags":["up to 8 short tags"],"entities":[{"key":"stable_short_key","name":"exact entity name","type":"person|organization|technology|date|url|place|concept","confidence":0.0,"evidence":"short exact supporting phrase"}],"relationships":[{"source":"entity_key","target":"entity_key","type":"short relationship label","confidence":0.0,"evidence":"short exact supporting phrase"}]}
+Extract only entities and relationships explicitly supported by the source. Relationship source and target must reference entity keys. Preserve important names, dates, links, headings, and actionable details. Do not invent missing content.`;
 
 async function callNvidiaChat(
   content: string | Record<string, unknown>[],
@@ -599,6 +694,13 @@ async function processJob(admin: any, job: ProcessingJob) {
     result = await processDocument(await loadStoredFile(admin, memory), memory);
   }
 
+  const { error: graphError } = await admin.rpc("replace_memory_graph", {
+    target_job_id: job.id,
+    result_entities: result.entities,
+    result_relationships: result.relationships,
+  });
+  if (graphError) throw new Error(graphError.message);
+
   const { error: completeError } = await admin.rpc("complete_processing_job", {
     target_job_id: job.id,
     result_text: result.extracted_text,
@@ -608,6 +710,8 @@ async function processJob(admin: any, job: ProcessingJob) {
       processing_provider: result.provider,
       processing_model: result.model,
       processed_job_type: job.job_type,
+      extracted_entity_count: result.entities.length,
+      extracted_relationship_count: result.relationships.length,
     },
   });
   if (completeError) throw new Error(completeError.message);
