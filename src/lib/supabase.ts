@@ -26,6 +26,7 @@ export type MemoryRecord = MemoryInput & {
   extracted_text: string | null;
   extracted_at: string | null;
   is_favorite: boolean;
+  tags: string[];
 };
 
 export type CollectionRecord = {
@@ -188,7 +189,7 @@ export async function createMemory(input: MemoryInput) {
       source_url: sourceUrl,
       content_fingerprint: contentFingerprint,
     })
-    .select("id, title, content, kind, source_url, processing_status, created_at, storage_path, original_filename, mime_type, file_size, summary, extracted_text, extracted_at, is_favorite")
+    .select("id, title, content, kind, source_url, processing_status, created_at, storage_path, original_filename, mime_type, file_size, summary, extracted_text, extracted_at, is_favorite, tags")
     .single();
 
   if (error?.code === "23505" && contentFingerprint) throw duplicateRaceError("link");
@@ -201,7 +202,7 @@ export async function listMemories(): Promise<MemoryRecord[]> {
   await ensureUser();
   const { data, error } = await supabase
     .from("memories")
-    .select("id, title, content, kind, source_url, processing_status, created_at, storage_path, original_filename, mime_type, file_size, summary, extracted_text, extracted_at, is_favorite")
+    .select("id, title, content, kind, source_url, processing_status, created_at, storage_path, original_filename, mime_type, file_size, summary, extracted_text, extracted_at, is_favorite, tags")
     .order("created_at", { ascending: false })
     .limit(50);
 
@@ -373,7 +374,7 @@ export async function createFileMemory(file: File, title: string, uploadOptions:
         file_size: file.size,
         content_fingerprint: contentFingerprint,
       })
-      .select("id, title, content, kind, source_url, processing_status, created_at, storage_path, original_filename, mime_type, file_size, summary, extracted_text, extracted_at, is_favorite")
+      .select("id, title, content, kind, source_url, processing_status, created_at, storage_path, original_filename, mime_type, file_size, summary, extracted_text, extracted_at, is_favorite, tags")
       .single();
 
     if (error?.code === "23505") throw duplicateRaceError("file");
@@ -444,6 +445,7 @@ export async function deleteMemory(memoryId: string, storagePath: string | null)
 type MemoryRow = Pick<Database["public"]["Tables"]["memories"]["Row"], "id" | "title" | "content" | "kind" | "processing_status" | "created_at" | "storage_path" | "original_filename" | "mime_type" | "file_size" | "summary" | "extracted_text" | "extracted_at"> & {
   source_url?: string | null;
   is_favorite?: boolean;
+  tags?: string[];
 };
 
 export function normalizeMemory(memory: MemoryRow): MemoryRecord {
@@ -470,5 +472,6 @@ export function normalizeMemory(memory: MemoryRow): MemoryRecord {
     extracted_text: memory.extracted_text,
     extracted_at: memory.extracted_at,
     is_favorite: memory.is_favorite ?? false,
+    tags: memory.tags ?? [],
   };
 }

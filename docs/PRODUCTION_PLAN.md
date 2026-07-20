@@ -162,7 +162,8 @@ Goal: turn stored information into useful action.
 
 - [ ] Add AI-generated collection rules (manual collections and membership are now persisted)
 - [ ] Derive people, organizations, technologies, dates, and links
-- [ ] Build a real graph API and interactive exploration UI
+- [x] Build an interactive graph from private memories and AI tags
+- [ ] Add a server graph/entity API for deeper relationship extraction
 - [ ] Generate flashcards and quizzes
 - [ ] Implement spaced-repetition scheduling
 - [ ] Extract tasks and reminders with user confirmation
