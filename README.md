@@ -24,6 +24,7 @@ Neuron is a personal knowledge workspace for capturing notes, links, files, and 
 - User-controlled, three-memory entity backfill with visible progress and no automatic provider spend
 - Source-backed task and reminder suggestions with explicit accept/dismiss confirmation
 - Cost-free daily, weekly, and monthly recaps generated from real private activity
+- Source-backed flashcards and multiple-choice Study Mode with controlled legacy analysis
 - Strict TypeScript and production builds
 
 The production roadmap is in [docs/PRODUCTION_PLAN.md](docs/PRODUCTION_PLAN.md).
@@ -38,6 +39,7 @@ Knowledge graph behavior is documented in [docs/KNOWLEDGE_GRAPH.md](docs/KNOWLED
 Entity extraction and provenance are documented in [docs/ENTITY_EXTRACTION.md](docs/ENTITY_EXTRACTION.md).
 Task extraction and confirmation are documented in [docs/ACTION_ITEMS.md](docs/ACTION_ITEMS.md).
 Daily and weekly recap behavior is documented in [docs/DAILY_WEEKLY_RECAPS.md](docs/DAILY_WEEKLY_RECAPS.md).
+Flashcards, quizzes, and controlled study analysis are documented in [docs/STUDY_MODE.md](docs/STUDY_MODE.md).
 
 ## Branches
 
@@ -55,6 +57,7 @@ Daily and weekly recap behavior is documented in [docs/DAILY_WEEKLY_RECAPS.md](d
 | `feature/controlled-entity-backfill` | Cost-capped reanalysis for existing memories |
 | `feature/action-items` | Confirmed, source-backed tasks and reminders |
 | `feature/daily-weekly-recaps` | Real activity summaries, themes, streaks, and completed work |
+| `feature/study-mode` | Private source-backed flashcards and quizzes |
 
 For future work, create focused branches from `phase-2-production`, such as `feature/file-upload`, `feature/semantic-search`, or `fix/mobile-capture`.
 

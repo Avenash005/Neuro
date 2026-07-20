@@ -165,7 +165,7 @@ Goal: turn stored information into useful action.
 - [x] Build an interactive graph from private memories and AI tags
 - [x] Add owner-scoped entity storage and read API for relationship extraction
 - [x] Add explicit cost-capped backfill for legacy memory entities
-- [ ] Generate flashcards and quizzes
+- [x] Generate flashcards and quizzes
 - [ ] Implement spaced-repetition scheduling
 - [x] Extract tasks and reminders with user confirmation
 - [x] Generate daily and weekly recaps

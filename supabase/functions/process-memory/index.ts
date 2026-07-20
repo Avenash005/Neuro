@@ -41,6 +41,7 @@ type ExtractionResult = {
   entities: ExtractedEntity[];
   relationships: ExtractedRelationship[];
   action_items: ExtractedActionItem[];
+  study_cards: ExtractedStudyCard[];
   model: string;
   provider: "nvidia" | "openai" | "local";
 };
@@ -50,6 +51,14 @@ type ExtractedActionItem = {
   description: string;
   type: "task" | "reminder";
   due_at: string | null;
+  confidence: number;
+  evidence: string;
+};
+
+type ExtractedStudyCard = {
+  question: string;
+  answer: string;
+  distractors: string[];
   confidence: number;
   evidence: string;
 };
@@ -142,6 +151,7 @@ export function localExtraction(text: string): ExtractionResult {
     entities: [],
     relationships: [],
     action_items: [],
+    study_cards: [],
     model: "local-text-extractor",
     provider: "local",
   };
@@ -211,6 +221,32 @@ function validatedExtraction(parsed: Partial<ExtractionResult>): Omit<Extraction
       evidence: typeof value.evidence === "string" ? value.evidence.trim().slice(0, 300) : "",
     }];
   }).slice(0, 12);
+  const studyQuestions = new Set<string>();
+  const study_cards = (Array.isArray(parsed.study_cards) ? parsed.study_cards : []).flatMap((candidate) => {
+    if (!candidate || typeof candidate !== "object") return [];
+    const value = candidate as Partial<ExtractedStudyCard>;
+    const question = typeof value.question === "string" ? value.question.trim().slice(0, 300) : "";
+    const answer = typeof value.answer === "string" ? value.answer.trim().slice(0, 1200) : "";
+    const normalizedQuestion = question.toLowerCase().replace(/\s+/g, " ");
+    if (!question || !answer || studyQuestions.has(normalizedQuestion)) return [];
+    studyQuestions.add(normalizedQuestion);
+    const seenOptions = new Set([answer.toLowerCase().replace(/\s+/g, " ")]);
+    const distractors = (Array.isArray(value.distractors) ? value.distractors : []).flatMap((option) => {
+      if (typeof option !== "string") return [];
+      const trimmed = option.trim().slice(0, 300);
+      const normalized = trimmed.toLowerCase().replace(/\s+/g, " ");
+      if (!trimmed || seenOptions.has(normalized)) return [];
+      seenOptions.add(normalized);
+      return [trimmed];
+    }).slice(0, 3);
+    return [{
+      question,
+      answer,
+      distractors,
+      confidence: typeof value.confidence === "number" && Number.isFinite(value.confidence) ? Math.max(0, Math.min(1, value.confidence)) : 0.7,
+      evidence: typeof value.evidence === "string" ? value.evidence.trim().slice(0, 300) : "",
+    }];
+  }).slice(0, 6);
   return {
     extracted_text: parsed.extracted_text.slice(0, 500_000),
     summary: parsed.summary.slice(0, 800),
@@ -218,6 +254,7 @@ function validatedExtraction(parsed: Partial<ExtractionResult>): Omit<Extraction
     entities,
     relationships,
     action_items,
+    study_cards,
   };
 }
 
@@ -264,7 +301,7 @@ async function callOpenAiResponses(content: Record<string, unknown>[], userId: s
       reasoning: { effort: "none" },
       max_output_tokens: 5000,
       safety_identifier: await safetyIdentifier(userId),
-      instructions: "Extract a faithful personal-memory record. Preserve important names, dates, links, headings, and actionable details. Extract action items only for explicit commitments, requests, tasks, or reminders in the source; never turn general ideas or facts into tasks. Set due_at only when the source explicitly provides a date or time. Do not invent missing content.",
+      instructions: "Extract a faithful personal-memory record. Preserve important names, dates, links, headings, and actionable details. Extract action items only for explicit commitments, requests, tasks, or reminders in the source; never turn general ideas or facts into tasks. Set due_at only when the source explicitly provides a date or time. Create study cards only for useful, non-trivial knowledge explicitly supported by the source. Each card needs a direct answer and up to three plausible but incorrect distractors. Do not invent missing content.",
       input: [{ role: "user", content }],
       text: {
         verbosity: "low",
@@ -331,8 +368,25 @@ async function callOpenAiResponses(content: Record<string, unknown>[], userId: s
                   required: ["title", "description", "type", "due_at", "confidence", "evidence"],
                 },
               },
+              study_cards: {
+                type: "array",
+                maxItems: 6,
+                description: "Useful source-backed flashcards. Return an empty array when the memory has no worthwhile study material.",
+                items: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    question: { type: "string" },
+                    answer: { type: "string" },
+                    distractors: { type: "array", maxItems: 3, items: { type: "string" }, description: "Plausible incorrect answers supported by the same subject context." },
+                    confidence: { type: "number", minimum: 0, maximum: 1 },
+                    evidence: { type: "string", description: "A short exact source phrase supporting the correct answer." },
+                  },
+                  required: ["question", "answer", "distractors", "confidence", "evidence"],
+                },
+              },
             },
-            required: ["extracted_text", "summary", "tags", "entities", "relationships", "action_items"],
+            required: ["extracted_text", "summary", "tags", "entities", "relationships", "action_items", "study_cards"],
           },
         },
       },
@@ -377,8 +431,8 @@ async function resolveNvidiaResponse(response: Response, apiKey: string, label: 
 }
 
 const NVIDIA_JSON_INSTRUCTIONS = `Return only valid JSON with exactly these keys:
-{"extracted_text":"faithful extracted or transcribed content","summary":"concise factual summary under 120 words","tags":["up to 8 short tags"],"entities":[{"key":"stable_short_key","name":"exact entity name","type":"person|organization|technology|date|url|place|concept","confidence":0.0,"evidence":"short exact supporting phrase"}],"relationships":[{"source":"entity_key","target":"entity_key","type":"short relationship label","confidence":0.0,"evidence":"short exact supporting phrase"}],"action_items":[{"title":"clear action","description":"brief source-backed context","type":"task|reminder","due_at":null,"confidence":0.0,"evidence":"short exact supporting phrase"}]}
-Extract only entities and relationships explicitly supported by the source. Relationship source and target must reference entity keys. Extract action items only for explicit commitments, requests, tasks, or reminders; never convert general ideas or facts into tasks. Use an ISO-8601 due_at only when the source explicitly states a date or time, otherwise null. Preserve important names, dates, links, headings, and actionable details. Do not invent missing content.`;
+{"extracted_text":"faithful extracted or transcribed content","summary":"concise factual summary under 120 words","tags":["up to 8 short tags"],"entities":[{"key":"stable_short_key","name":"exact entity name","type":"person|organization|technology|date|url|place|concept","confidence":0.0,"evidence":"short exact supporting phrase"}],"relationships":[{"source":"entity_key","target":"entity_key","type":"short relationship label","confidence":0.0,"evidence":"short exact supporting phrase"}],"action_items":[{"title":"clear action","description":"brief source-backed context","type":"task|reminder","due_at":null,"confidence":0.0,"evidence":"short exact supporting phrase"}],"study_cards":[{"question":"source-backed question","answer":"direct correct answer","distractors":["plausible incorrect answer"],"confidence":0.0,"evidence":"short exact supporting phrase"}]}
+Extract only entities and relationships explicitly supported by the source. Relationship source and target must reference entity keys. Extract action items only for explicit commitments, requests, tasks, or reminders; never convert general ideas or facts into tasks. Use an ISO-8601 due_at only when the source explicitly states a date or time, otherwise null. Create up to 6 useful study cards only for non-trivial knowledge explicitly supported by the source, each with a direct answer and up to 3 plausible incorrect distractors. Preserve important names, dates, links, headings, and actionable details. Do not invent missing content.`;
 
 async function callNvidiaChat(
   content: string | Record<string, unknown>[],
@@ -760,6 +814,12 @@ async function processJob(admin: any, job: ProcessingJob) {
   });
   if (actionItemError) throw new Error(actionItemError.message);
 
+  const { error: studyCardError } = await admin.rpc("replace_memory_study_cards", {
+    target_job_id: job.id,
+    result_study_cards: result.study_cards,
+  });
+  if (studyCardError) throw new Error(studyCardError.message);
+
   const { error: completeError } = await admin.rpc("complete_processing_job", {
     target_job_id: job.id,
     result_text: result.extracted_text,
@@ -772,6 +832,7 @@ async function processJob(admin: any, job: ProcessingJob) {
       extracted_entity_count: result.entities.length,
       extracted_relationship_count: result.relationships.length,
       extracted_action_item_count: result.action_items.length,
+      extracted_study_card_count: result.study_cards.length,
     },
   });
   if (completeError) throw new Error(completeError.message);

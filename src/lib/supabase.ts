@@ -28,6 +28,7 @@ export type MemoryRecord = MemoryInput & {
   is_favorite: boolean;
   tags: string[];
   graph_analyzed_at: string | null;
+  study_analyzed_at?: string | null;
 };
 
 export type CollectionRecord = {
@@ -53,6 +54,18 @@ export type ActionItemRecord = {
   confidence: number;
   evidence: string;
   completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type StudyCardRecord = {
+  id: string;
+  memory_id: string;
+  question: string;
+  answer: string;
+  distractors: string[];
+  confidence: number;
+  evidence: string;
   created_at: string;
   updated_at: string;
 };
@@ -240,7 +253,7 @@ export async function createMemory(input: MemoryInput) {
       source_url: sourceUrl,
       content_fingerprint: contentFingerprint,
     })
-    .select("id, title, content, kind, source_url, processing_status, created_at, storage_path, original_filename, mime_type, file_size, summary, extracted_text, extracted_at, is_favorite, tags, graph_analyzed_at")
+    .select("id, title, content, kind, source_url, processing_status, created_at, storage_path, original_filename, mime_type, file_size, summary, extracted_text, extracted_at, is_favorite, tags, graph_analyzed_at, study_analyzed_at")
     .single();
 
   if (error?.code === "23505" && contentFingerprint) throw duplicateRaceError("link");
@@ -253,7 +266,7 @@ export async function listMemories(): Promise<MemoryRecord[]> {
   await ensureUser();
   const { data, error } = await supabase
     .from("memories")
-    .select("id, title, content, kind, source_url, processing_status, created_at, storage_path, original_filename, mime_type, file_size, summary, extracted_text, extracted_at, is_favorite, tags, graph_analyzed_at")
+    .select("id, title, content, kind, source_url, processing_status, created_at, storage_path, original_filename, mime_type, file_size, summary, extracted_text, extracted_at, is_favorite, tags, graph_analyzed_at, study_analyzed_at")
     .order("created_at", { ascending: false })
     .limit(50);
 
@@ -304,6 +317,17 @@ export async function listActionItems(): Promise<ActionItemRecord[]> {
     .order("created_at", { ascending: false });
   if (error) throw error;
   return data as ActionItemRecord[];
+}
+
+export async function listStudyCards(): Promise<StudyCardRecord[]> {
+  if (!supabase) return [];
+  await ensureUser();
+  const { data, error } = await supabase
+    .from("study_cards")
+    .select("id, memory_id, question, answer, distractors, confidence, evidence, created_at, updated_at")
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return data as StudyCardRecord[];
 }
 
 export async function updateActionItemStatus(actionItemId: string, status: Exclude<ActionItemStatus, "suggested">) {
@@ -466,7 +490,7 @@ export async function createFileMemory(file: File, title: string, uploadOptions:
         file_size: file.size,
         content_fingerprint: contentFingerprint,
       })
-      .select("id, title, content, kind, source_url, processing_status, created_at, storage_path, original_filename, mime_type, file_size, summary, extracted_text, extracted_at, is_favorite, tags, graph_analyzed_at")
+      .select("id, title, content, kind, source_url, processing_status, created_at, storage_path, original_filename, mime_type, file_size, summary, extracted_text, extracted_at, is_favorite, tags, graph_analyzed_at, study_analyzed_at")
       .single();
 
     if (error?.code === "23505") throw duplicateRaceError("file");
@@ -491,6 +515,16 @@ export async function requestMemoryReanalysis(memoryIds: string[]) {
   const uniqueIds = [...new Set(memoryIds)].slice(0, 3);
   if (!uniqueIds.length) return [];
   const { data, error } = await supabase.rpc("request_memory_reanalysis", { target_memory_ids: uniqueIds });
+  if (error) throw error;
+  return data;
+}
+
+export async function requestStudyReanalysis(memoryIds: string[]) {
+  if (!supabase) throw new Error("Supabase is not configured.");
+  await ensureUser();
+  const uniqueIds = [...new Set(memoryIds)].slice(0, 3);
+  if (!uniqueIds.length) return [];
+  const { data, error } = await supabase.rpc("request_study_reanalysis", { target_memory_ids: uniqueIds });
   if (error) throw error;
   return data;
 }
@@ -549,6 +583,7 @@ type MemoryRow = Pick<Database["public"]["Tables"]["memories"]["Row"], "id" | "t
   is_favorite?: boolean;
   tags?: string[];
   graph_analyzed_at?: string | null;
+  study_analyzed_at?: string | null;
 };
 
 export function normalizeMemory(memory: MemoryRow): MemoryRecord {
@@ -577,5 +612,6 @@ export function normalizeMemory(memory: MemoryRow): MemoryRecord {
     is_favorite: memory.is_favorite ?? false,
     tags: memory.tags ?? [],
     graph_analyzed_at: memory.graph_analyzed_at ?? null,
+    study_analyzed_at: memory.study_analyzed_at ?? null,
   };
 }

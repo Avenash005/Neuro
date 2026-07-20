@@ -28,6 +28,7 @@ export type Database = {
           search_document: string | null;
           is_favorite: boolean;
           graph_analyzed_at: string | null;
+          study_analyzed_at: string | null;
           content_fingerprint: string | null;
           created_at: string;
           updated_at: string;
@@ -55,6 +56,7 @@ export type Database = {
           embedded_at?: string | null;
           is_favorite?: boolean;
           graph_analyzed_at?: string | null;
+          study_analyzed_at?: string | null;
           content_fingerprint?: string | null;
           created_at?: string;
           updated_at?: string;
@@ -82,6 +84,7 @@ export type Database = {
           embedded_at?: string | null;
           is_favorite?: boolean;
           graph_analyzed_at?: string | null;
+          study_analyzed_at?: string | null;
           content_fingerprint?: string | null;
           created_at?: string;
           updated_at?: string;
@@ -161,6 +164,12 @@ export type Database = {
         Update: { title?: string; normalized_title?: string; description?: string; item_type?: string; status?: string; due_at?: string | null; confidence?: number; evidence?: string; completed_at?: string | null; updated_at?: string };
         Relationships: [];
       };
+      study_cards: {
+        Row: { id: string; user_id: string; memory_id: string; question: string; normalized_question: string; answer: string; distractors: string[]; confidence: number; evidence: string; created_at: string; updated_at: string };
+        Insert: { id?: string; user_id: string; memory_id: string; question: string; normalized_question: string; answer: string; distractors?: string[]; confidence?: number; evidence?: string; created_at?: string; updated_at?: string };
+        Update: { question?: string; normalized_question?: string; answer?: string; distractors?: string[]; confidence?: number; evidence?: string; updated_at?: string };
+        Relationships: [];
+      };
       profiles: {
         Row: {
           id: string;
@@ -216,6 +225,14 @@ export type Database = {
       };
       replace_memory_action_items: {
         Args: { target_job_id: string; result_action_items?: Json };
+        Returns: undefined;
+      };
+      request_study_reanalysis: {
+        Args: { target_memory_ids: string[] };
+        Returns: string[];
+      };
+      replace_memory_study_cards: {
+        Args: { target_job_id: string; result_study_cards?: Json };
         Returns: undefined;
       };
       update_action_item_status: {

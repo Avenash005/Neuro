@@ -16,6 +16,7 @@ const baseMemory = {
   is_favorite: false,
   tags: [],
   graph_analyzed_at: null,
+  study_analyzed_at: null,
 };
 
 describe("normalizeMemory", () => {
@@ -24,6 +25,7 @@ describe("normalizeMemory", () => {
       ...baseMemory,
       kind: "Voice",
       processing_status: "ready",
+      sourceUrl: undefined,
     });
   });
 
