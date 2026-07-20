@@ -26,4 +26,4 @@ The page derives its information from the existing owner-scoped `memories` rows,
 
 ## Next production upgrade
 
-Persist tasks and explicit work events in Supabase. Favorites and manual collections are now durable; event storage will enable richer daily and weekly AI recaps without relying only on memory creation timestamps.
+Tasks are now persisted in Supabase, and the Recaps page combines captures with completed actions. A future event table can add richer signals such as revisits, edits, searches, and study sessions without relying only on memory and task timestamps.

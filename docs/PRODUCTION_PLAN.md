@@ -168,7 +168,7 @@ Goal: turn stored information into useful action.
 - [ ] Generate flashcards and quizzes
 - [ ] Implement spaced-repetition scheduling
 - [x] Extract tasks and reminders with user confirmation
-- [ ] Generate daily and weekly recaps
+- [x] Generate daily and weekly recaps
 
 ### Phase 3 — Scale and ecosystem
 
