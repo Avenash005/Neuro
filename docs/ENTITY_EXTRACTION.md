@@ -35,9 +35,19 @@ The model may also return explicit entity-to-entity relationships such as `uses`
 
 The schema is defined in `supabase/migrations/20260720000500_memory_entities.sql`. The worker writes through `replace_memory_graph` before completing its processing job, so a failed graph write is retried instead of silently losing provenance.
 
-## Rollout behavior
+## Controlled backfill
 
-Newly processed memories receive typed entities automatically. Existing processed memories continue to appear through the graph's tag fallback and are not automatically reprocessed, avoiding surprise provider usage. Reprocessing can be added later as an explicit user-controlled backfill action.
+Newly processed memories receive typed entities automatically. Existing processed memories continue through the graph's tag fallback until the user chooses **Analyze entities**.
+
+- The Graph banner selects the oldest eligible memories first.
+- A batch is capped at three in both the frontend and database RPC.
+- A specific memory can be analyzed from its graph inspector.
+- Only owner-scoped, ready, previously unanalyzed memories are eligible.
+- Running jobs cannot be requeued.
+- Progress is visible while each selected memory is processed.
+- `graph_analyzed_at` prevents repeat backfill spending after successful analysis, even when the source contains no extractable entities.
+
+The secure `request_memory_reanalysis` function derives ownership from `auth.uid()` and only queues the non-embedding processing job. It never accepts a user ID from the browser.
 
 ## Deployment verification
 

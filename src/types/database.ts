@@ -27,6 +27,7 @@ export type Database = {
           embedded_at: string | null;
           search_document: string | null;
           is_favorite: boolean;
+          graph_analyzed_at: string | null;
           content_fingerprint: string | null;
           created_at: string;
           updated_at: string;
@@ -53,6 +54,7 @@ export type Database = {
           embedding_model?: string | null;
           embedded_at?: string | null;
           is_favorite?: boolean;
+          graph_analyzed_at?: string | null;
           content_fingerprint?: string | null;
           created_at?: string;
           updated_at?: string;
@@ -79,6 +81,7 @@ export type Database = {
           embedding_model?: string | null;
           embedded_at?: string | null;
           is_favorite?: boolean;
+          graph_analyzed_at?: string | null;
           content_fingerprint?: string | null;
           created_at?: string;
           updated_at?: string;
@@ -180,6 +183,10 @@ export type Database = {
       request_processing_retry: {
         Args: { target_memory_id: string };
         Returns: undefined;
+      };
+      request_memory_reanalysis: {
+        Args: { target_memory_ids: string[] };
+        Returns: string[];
       };
       claim_processing_jobs: {
         Args: { batch_limit?: number; target_memory_id?: string | null; target_user_id?: string | null };

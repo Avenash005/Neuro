@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { KnowledgeEntityData, MemoryRecord } from "../../lib/supabase";
-import { buildKnowledgeGraph } from "./graphData";
+import { buildKnowledgeGraph, graphBackfillCandidates } from "./graphData";
 
 function memory(id: string, title: string, tags: string[] = [], kind: MemoryRecord["kind"] = "Note"): MemoryRecord {
   return {
@@ -19,6 +19,7 @@ function memory(id: string, title: string, tags: string[] = [], kind: MemoryReco
     extracted_text: null,
     extracted_at: null,
     is_favorite: false,
+    graph_analyzed_at: null,
   };
 }
 
@@ -70,5 +71,15 @@ describe("buildKnowledgeGraph", () => {
     expect(graph.nodes).toContainEqual(expect.objectContaining({ label: "Avenash", entityType: "person" }));
     expect(graph.relationshipCount).toBe(1);
     expect(graph.edges).toContainEqual(expect.objectContaining({ kind: "relationship", label: "uses", memoryId: "1", evidence: "built with React" }));
+  });
+});
+
+describe("graphBackfillCandidates", () => {
+  it("selects at most three oldest ready memories that have not been analyzed", () => {
+    const candidates = [memory("5", "Newest"), memory("1", "Oldest"), memory("2", "Analyzed"), memory("3", "Processing"), memory("4", "Ready")];
+    candidates[2].graph_analyzed_at = "2026-07-20T00:00:00.000Z";
+    candidates[3].processing_status = "processing";
+
+    expect(graphBackfillCandidates(candidates).map((item) => item.id)).toEqual(["1", "4", "5"]);
   });
 });

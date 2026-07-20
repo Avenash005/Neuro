@@ -27,6 +27,7 @@ export type MemoryRecord = MemoryInput & {
   extracted_at: string | null;
   is_favorite: boolean;
   tags: string[];
+  graph_analyzed_at: string | null;
 };
 
 export type CollectionRecord = {
@@ -222,7 +223,7 @@ export async function createMemory(input: MemoryInput) {
       source_url: sourceUrl,
       content_fingerprint: contentFingerprint,
     })
-    .select("id, title, content, kind, source_url, processing_status, created_at, storage_path, original_filename, mime_type, file_size, summary, extracted_text, extracted_at, is_favorite, tags")
+    .select("id, title, content, kind, source_url, processing_status, created_at, storage_path, original_filename, mime_type, file_size, summary, extracted_text, extracted_at, is_favorite, tags, graph_analyzed_at")
     .single();
 
   if (error?.code === "23505" && contentFingerprint) throw duplicateRaceError("link");
@@ -235,7 +236,7 @@ export async function listMemories(): Promise<MemoryRecord[]> {
   await ensureUser();
   const { data, error } = await supabase
     .from("memories")
-    .select("id, title, content, kind, source_url, processing_status, created_at, storage_path, original_filename, mime_type, file_size, summary, extracted_text, extracted_at, is_favorite, tags")
+    .select("id, title, content, kind, source_url, processing_status, created_at, storage_path, original_filename, mime_type, file_size, summary, extracted_text, extracted_at, is_favorite, tags, graph_analyzed_at")
     .order("created_at", { ascending: false })
     .limit(50);
 
@@ -425,7 +426,7 @@ export async function createFileMemory(file: File, title: string, uploadOptions:
         file_size: file.size,
         content_fingerprint: contentFingerprint,
       })
-      .select("id, title, content, kind, source_url, processing_status, created_at, storage_path, original_filename, mime_type, file_size, summary, extracted_text, extracted_at, is_favorite, tags")
+      .select("id, title, content, kind, source_url, processing_status, created_at, storage_path, original_filename, mime_type, file_size, summary, extracted_text, extracted_at, is_favorite, tags, graph_analyzed_at")
       .single();
 
     if (error?.code === "23505") throw duplicateRaceError("file");
@@ -442,6 +443,16 @@ export async function retryMemoryProcessing(memoryId: string) {
   if (!supabase) throw new Error("Supabase is not configured.");
   const { error } = await supabase.rpc("request_processing_retry", { target_memory_id: memoryId });
   if (error) throw error;
+}
+
+export async function requestMemoryReanalysis(memoryIds: string[]) {
+  if (!supabase) throw new Error("Supabase is not configured.");
+  await ensureUser();
+  const uniqueIds = [...new Set(memoryIds)].slice(0, 3);
+  if (!uniqueIds.length) return [];
+  const { data, error } = await supabase.rpc("request_memory_reanalysis", { target_memory_ids: uniqueIds });
+  if (error) throw error;
+  return data;
 }
 
 export async function processMemoryNow(memoryId: string) {
@@ -497,6 +508,7 @@ type MemoryRow = Pick<Database["public"]["Tables"]["memories"]["Row"], "id" | "t
   source_url?: string | null;
   is_favorite?: boolean;
   tags?: string[];
+  graph_analyzed_at?: string | null;
 };
 
 export function normalizeMemory(memory: MemoryRow): MemoryRecord {
@@ -524,5 +536,6 @@ export function normalizeMemory(memory: MemoryRow): MemoryRecord {
     extracted_at: memory.extracted_at,
     is_favorite: memory.is_favorite ?? false,
     tags: memory.tags ?? [],
+    graph_analyzed_at: memory.graph_analyzed_at ?? null,
   };
 }
