@@ -8,6 +8,7 @@ import { AuthModal } from "./features/auth/AuthModal";
 import { ActivityView } from "./features/activity/ActivityView";
 import { Dashboard } from "./features/dashboard/Dashboard";
 import { KnowledgeGraphView } from "./features/graph/KnowledgeGraphView";
+import { TasksView } from "./features/tasks/TasksView";
 import { CollectionsView, LibraryView } from "./features/views/FeatureViews";
 import {
   addMemoryToCollection,
@@ -20,6 +21,7 @@ import {
   downloadMemoryFile,
   isSupabaseConfigured,
   listKnowledgeEntityData,
+  listActionItems,
   listMemories,
   listCollections,
   onAuthChange,
@@ -28,6 +30,7 @@ import {
   retryMemoryProcessing,
   removeMemoryFromCollection,
   requestMemoryReanalysis,
+  updateActionItemStatus,
   setMemoryFavorite,
   DuplicateMemoryError,
   type MemoryInput,
@@ -35,6 +38,8 @@ import {
   type CollectionRecord,
   EMPTY_KNOWLEDGE_ENTITY_DATA,
   type KnowledgeEntityData,
+  type ActionItemRecord,
+  type ActionItemStatus,
 } from "./lib/supabase";
 import type { BackendStatus, View } from "./types/app";
 import type { SignedUploadOptions } from "./lib/signedUpload";
@@ -54,6 +59,7 @@ export default function App() {
   const [syncedMemories, setSyncedMemories] = useState<MemoryRecord[]>([]);
   const [syncedCollections, setSyncedCollections] = useState<CollectionRecord[]>([]);
   const [knowledgeEntities, setKnowledgeEntities] = useState<KnowledgeEntityData>(EMPTY_KNOWLEDGE_ENTITY_DATA);
+  const [actionItems, setActionItems] = useState<ActionItemRecord[]>([]);
   const [openMemoryId, setOpenMemoryId] = useState<string | null>(null);
   const autoProcessingIds = useRef(new Set<string>());
   const activeUserId = useRef<string | null>(null);
@@ -66,8 +72,9 @@ export default function App() {
     if (activeView === "Activity") return <ActivityView memories={syncedMemories} onOpenMemory={openSearchResult} openCapture={openCapture} />;
     if (activeView === "Collections") return <CollectionsView collections={syncedCollections} memories={syncedMemories} onCreate={createWorkspaceCollection} onDelete={removeWorkspaceCollection} onOpenMemory={openSearchResult} onRemoveMemory={removeCollectionMembership} />;
     if (activeView === "Graph") return <KnowledgeGraphView memories={syncedMemories} entityData={knowledgeEntities} onOpenMemory={openSearchResult} onReanalyze={reanalyzeMemories} openAssistant={() => setAssistantOpen(true)} />;
-    return <Dashboard onSearch={search} openCapture={openCapture} openAssistant={() => setAssistantOpen(true)} openActivity={() => setActiveView("Activity")} openLibrary={() => setActiveView("Library")} memories={syncedMemories} onOpenMemory={openSearchResult} onToggleFavorite={toggleFavorite} />;
-  }, [activeView, syncedMemories, syncedCollections, knowledgeEntities, openMemoryId]);
+    if (activeView === "Tasks") return <TasksView items={actionItems} memories={syncedMemories} onChangeStatus={changeActionItemStatus} onOpenMemory={openSearchResult} />;
+    return <Dashboard onSearch={search} openCapture={openCapture} openAssistant={() => setAssistantOpen(true)} openActivity={() => setActiveView("Activity")} openLibrary={() => setActiveView("Library")} openTasks={() => setActiveView("Tasks")} memories={syncedMemories} actionItems={actionItems} onOpenMemory={openSearchResult} onToggleFavorite={toggleFavorite} onCompleteTask={(id) => changeActionItemStatus(id, "completed")} />;
+  }, [activeView, syncedMemories, syncedCollections, knowledgeEntities, actionItems, openMemoryId]);
 
   useEffect(() => {
     if (!isSupabaseConfigured) return;
@@ -75,19 +82,21 @@ export default function App() {
     const initialize = async () => {
       try {
         const user = await connectSupabase();
-        const [memories, collections, entities] = await Promise.all([listMemories(), listCollections(), listKnowledgeEntityData()]);
+        const [memories, collections, entities, tasks] = await Promise.all([listMemories(), listCollections(), listKnowledgeEntityData(), listActionItems()]);
         if (active) {
           activeUserId.current = user ? user.id : null;
           setAuthUser(user || null);
           setSyncedMemories(memories);
           setSyncedCollections(collections);
           setKnowledgeEntities(entities);
+          setActionItems(tasks);
           setBackendStatus("connected");
           void processMemoryBacklog().then(async (backlog) => {
             if (!active || backlog.processed === 0) return;
-            const [updatedMemories, updatedEntities] = await Promise.all([listMemories(), listKnowledgeEntityData()]);
+            const [updatedMemories, updatedEntities, updatedTasks] = await Promise.all([listMemories(), listKnowledgeEntityData(), listActionItems()]);
             setSyncedMemories(updatedMemories);
             setKnowledgeEntities(updatedEntities);
+            setActionItems(updatedTasks);
           }).catch((backlogError) => console.error("Background processing is unavailable", backlogError));
         }
       } catch (error) {
@@ -106,6 +115,7 @@ export default function App() {
       setSyncedMemories([]);
       setSyncedCollections([]);
       setKnowledgeEntities(EMPTY_KNOWLEDGE_ENTITY_DATA);
+      setActionItems([]);
       return;
     }
     setBackendStatus("connected");
@@ -114,11 +124,13 @@ export default function App() {
     setSyncedMemories([]);
     setSyncedCollections([]);
     setKnowledgeEntities(EMPTY_KNOWLEDGE_ENTITY_DATA);
-    void Promise.all([listMemories(), listCollections(), listKnowledgeEntityData()]).then(([memories, collections, entities]) => {
+    setActionItems([]);
+    void Promise.all([listMemories(), listCollections(), listKnowledgeEntityData(), listActionItems()]).then(([memories, collections, entities, tasks]) => {
       if (activeUserId.current !== user.id) return;
       setSyncedMemories(memories);
       setSyncedCollections(collections);
       setKnowledgeEntities(entities);
+      setActionItems(tasks);
     }).catch((error) => console.error("Could not load the signed-in workspace", error));
   }), []);
 
@@ -163,9 +175,10 @@ export default function App() {
     setSyncedMemories((current) => current.map((memory) => memory.id === memoryId ? { ...memory, processing_status: "processing" } : memory));
     try {
       const result = await processMemoryNow(memoryId);
-      const [memories, entities] = await Promise.all([listMemories(), listKnowledgeEntityData()]);
+      const [memories, entities, tasks] = await Promise.all([listMemories(), listKnowledgeEntityData(), listActionItems()]);
       setSyncedMemories(memories);
       setKnowledgeEntities(entities);
+      setActionItems(tasks);
       if (result?.status === "completed") showToast("AI processing complete");
       else if (result?.status === "retry_queued") showToast("Processing will retry automatically");
     } catch (error) {
@@ -189,6 +202,7 @@ export default function App() {
       await deleteMemory(memory.id, memory.storage_path);
       setSyncedMemories((current) => current.filter((item) => item.id !== memory.id));
       setSyncedCollections((current) => current.map((collection) => ({ ...collection, memory_ids: collection.memory_ids.filter((id) => id !== memory.id) })));
+      setActionItems((current) => current.filter((item) => item.memory_id !== memory.id));
       showToast(`“${memory.title}” was permanently deleted`);
     } catch (error) {
       showToast(error instanceof Error ? error.message : "Could not delete this memory");
@@ -266,12 +280,26 @@ export default function App() {
       processed += 1;
       onProgress?.(processed, queuedIds.length);
     }
-    const [memories, entities] = await Promise.all([listMemories(), listKnowledgeEntityData()]);
+    const [memories, entities, tasks] = await Promise.all([listMemories(), listKnowledgeEntityData(), listActionItems()]);
     setSyncedMemories(memories);
     setKnowledgeEntities(entities);
+    setActionItems(tasks);
     if (completed) showToast(`Graph analysis complete for ${completed} ${completed === 1 ? "memory" : "memories"}`);
     if (!completed && firstError) throw firstError;
     return completed;
+  }
+
+  async function changeActionItemStatus(id: string, status: Exclude<ActionItemStatus, "suggested">) {
+    const previous = actionItems;
+    if (status === "dismissed") setActionItems((current) => current.filter((item) => item.id !== id));
+    else setActionItems((current) => current.map((item) => item.id === id ? { ...item, status, completed_at: status === "completed" ? new Date().toISOString() : null } : item));
+    try {
+      await updateActionItemStatus(id, status);
+      showToast(status === "accepted" ? "Added to your tasks" : status === "completed" ? "Task completed" : "Suggestion dismissed");
+    } catch (error) {
+      setActionItems(previous);
+      showToast(error instanceof Error ? error.message : "Could not update this task");
+    }
   }
 
   function openSearchResult(memory: MemoryRecord) {

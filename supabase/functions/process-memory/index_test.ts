@@ -28,6 +28,7 @@ Deno.test("provides a deterministic local extraction fallback", () => {
   assert(result.extracted_text === "A useful idea.\n\nWith context.", "source text should be preserved");
   assert(result.summary === "A useful idea. With context.", "summary should normalize whitespace");
   assert(result.provider === "local", "fallback provider should be local");
+  assert(result.action_items.length === 0, "local extraction must not invent action items");
 });
 
 Deno.test("parses NVIDIA JSON returned inside a markdown fence", () => {
@@ -68,6 +69,24 @@ Deno.test("validates typed entities and source-linked relationships", () => {
   assert(result.entities[1].confidence === 1, "entity confidence should be clamped");
   assert(result.relationships.length === 1, "relationships must reference validated entity keys");
   assert(result.relationships[0].type === "uses", "relationship type should be normalized");
+});
+
+Deno.test("validates and deduplicates explicit action items", () => {
+  const result = parseNvidiaResult({ choices: [{ message: { content: JSON.stringify({
+    extracted_text: "Send Maya the research summary tomorrow at 3 PM.",
+    summary: "A research follow-up is due.",
+    tags: ["follow-up"],
+    entities: [],
+    relationships: [],
+    action_items: [
+      { title: "Send Maya the research summary", description: "Follow up after the research review.", type: "task", due_at: "2026-07-21T15:00:00+05:30", confidence: 1.4, evidence: "Send Maya the research summary tomorrow at 3 PM" },
+      { title: " send maya the research summary ", description: "duplicate", type: "task", due_at: null, confidence: 0.6, evidence: "duplicate" },
+      { title: "Invalid type", description: "", type: "idea", due_at: null, confidence: 0.5, evidence: "" },
+    ],
+  }) } }] });
+  assert(result.action_items.length === 1, "duplicate and unsupported action items should be removed");
+  assert(result.action_items[0].confidence === 1, "action confidence should be clamped");
+  assert(result.action_items[0].due_at === "2026-07-21T09:30:00.000Z", "explicit due dates should be normalized");
 });
 
 Deno.test("extracts readable paragraphs and table cells from Office XML", () => {

@@ -155,6 +155,12 @@ export type Database = {
         Update: { relationship_type?: string; confidence?: number; evidence?: string };
         Relationships: [];
       };
+      action_items: {
+        Row: { id: string; user_id: string; memory_id: string; title: string; normalized_title: string; description: string; item_type: string; status: string; due_at: string | null; confidence: number; evidence: string; completed_at: string | null; created_at: string; updated_at: string };
+        Insert: { id?: string; user_id: string; memory_id: string; title: string; normalized_title: string; description?: string; item_type?: string; status?: string; due_at?: string | null; confidence?: number; evidence?: string; completed_at?: string | null; created_at?: string; updated_at?: string };
+        Update: { title?: string; normalized_title?: string; description?: string; item_type?: string; status?: string; due_at?: string | null; confidence?: number; evidence?: string; completed_at?: string | null; updated_at?: string };
+        Relationships: [];
+      };
       profiles: {
         Row: {
           id: string;
@@ -207,6 +213,14 @@ export type Database = {
       replace_memory_graph: {
         Args: { target_job_id: string; result_entities?: Json; result_relationships?: Json };
         Returns: undefined;
+      };
+      replace_memory_action_items: {
+        Args: { target_job_id: string; result_action_items?: Json };
+        Returns: undefined;
+      };
+      update_action_item_status: {
+        Args: { target_action_item_id: string; next_status: string };
+        Returns: Database["public"]["Tables"]["action_items"]["Row"];
       };
       store_memory_embedding: {
         Args: { target_memory_id: string; target_user_id: string; embedding_input: string; embedding_model_name: string };

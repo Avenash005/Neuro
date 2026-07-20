@@ -20,7 +20,7 @@ import { useMemo, useState } from "react";
 import { SearchBox } from "../../components/layout/AppLayout";
 import { recentItems } from "../../data/mockData";
 import type { LibraryItem } from "../../types/app";
-import type { MemoryRecord } from "../../lib/supabase";
+import type { ActionItemRecord, MemoryRecord } from "../../lib/supabase";
 
 type DashboardProps = {
   onSearch: (query: string) => void;
@@ -28,15 +28,18 @@ type DashboardProps = {
   openAssistant: () => void;
   openActivity: () => void;
   openLibrary: () => void;
+  openTasks: () => void;
   memories: MemoryRecord[];
+  actionItems: ActionItemRecord[];
   onOpenMemory: (memory: MemoryRecord) => void;
   onToggleFavorite: (memoryId: string, isFavorite: boolean) => Promise<void>;
+  onCompleteTask: (taskId: string) => Promise<void>;
 };
 
-export function Dashboard({ onSearch, openCapture, openAssistant, openActivity, openLibrary, memories, onOpenMemory, onToggleFavorite }: DashboardProps) {
-  const [checkedTasks, setCheckedTasks] = useState<number[]>([1]);
+export function Dashboard({ onSearch, openCapture, openAssistant, openActivity, openLibrary, openTasks, memories, actionItems, onOpenMemory, onToggleFavorite, onCompleteTask }: DashboardProps) {
   const today = new Intl.DateTimeFormat("en", { weekday: "long", month: "long", day: "numeric" }).format(new Date());
-  const toggleTask = (index: number) => setCheckedTasks((current) => current.includes(index) ? current.filter((item) => item !== index) : [...current, index]);
+  const focusTasks = actionItems.filter((item) => item.status === "accepted").slice(0, 3);
+  const suggestionCount = actionItems.filter((item) => item.status === "suggested").length;
   const thisWeek = useMemo(() => {
     const threshold = new Date();
     threshold.setDate(threshold.getDate() - 6);
@@ -80,15 +83,16 @@ export function Dashboard({ onSearch, openCapture, openAssistant, openActivity, 
         </motion.article>
 
         <motion.article className="card focus-card" initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: .12 }}>
-          <div className="card-heading"><div><span className="card-kicker neutral"><ListTodo size={14} /> Today</span><h2>Three things to move forward</h2></div><span className="task-count">{checkedTasks.length} / 3</span></div>
+          <div className="card-heading"><div><span className="card-kicker neutral"><ListTodo size={14} /> Today</span><h2>Your next moves</h2></div><span className="task-count">{focusTasks.length}</span></div>
           <div className="tasks">
-            {["Review Neuron onboarding flow", "Send research summary to Maya", "Outline offline sync architecture"].map((task, index) => (
-              <button key={task} className={`task ${checkedTasks.includes(index) ? "done" : ""}`} onClick={() => toggleTask(index)}>
-                <span className="check">{checkedTasks.includes(index) && <Check size={13} />}</span><span>{task}</span>{index === 0 && <small>Neuron</small>}
+            {focusTasks.map((task) => (
+              <button key={task.id} className="task" onClick={() => void onCompleteTask(task.id)}>
+                <span className="check"><Check size={13} /></span><span>{task.title}</span>{task.item_type === "reminder" && <small>Reminder</small>}
               </button>
             ))}
+            {!focusTasks.length && <div className="focus-empty">No accepted tasks yet. Review AI suggestions to build today’s focus.</div>}
           </div>
-          <button className="text-button" onClick={openActivity}>View work history <ArrowRight size={14} /></button>
+          <button className="text-button" onClick={openTasks}>{suggestionCount ? `Review ${suggestionCount} ${suggestionCount === 1 ? "suggestion" : "suggestions"}` : "Open tasks"} <ArrowRight size={14} /></button>
         </motion.article>
       </section>
 

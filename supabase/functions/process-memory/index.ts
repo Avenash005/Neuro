@@ -40,8 +40,18 @@ type ExtractionResult = {
   tags: string[];
   entities: ExtractedEntity[];
   relationships: ExtractedRelationship[];
+  action_items: ExtractedActionItem[];
   model: string;
   provider: "nvidia" | "openai" | "local";
+};
+
+type ExtractedActionItem = {
+  title: string;
+  description: string;
+  type: "task" | "reminder";
+  due_at: string | null;
+  confidence: number;
+  evidence: string;
 };
 
 type EntityType = "person" | "organization" | "technology" | "date" | "url" | "place" | "concept";
@@ -131,6 +141,7 @@ export function localExtraction(text: string): ExtractionResult {
     tags: [],
     entities: [],
     relationships: [],
+    action_items: [],
     model: "local-text-extractor",
     provider: "local",
   };
@@ -177,12 +188,36 @@ function validatedExtraction(parsed: Partial<ExtractionResult>): Omit<Extraction
       evidence: typeof value.evidence === "string" ? value.evidence.trim().slice(0, 300) : "",
     }];
   }).slice(0, 30);
+  const actionTitles = new Set<string>();
+  const action_items = (Array.isArray(parsed.action_items) ? parsed.action_items : []).flatMap((candidate) => {
+    if (!candidate || typeof candidate !== "object") return [];
+    const value = candidate as Partial<ExtractedActionItem>;
+    const title = typeof value.title === "string" ? value.title.trim().slice(0, 180) : "";
+    const normalizedTitle = title.toLowerCase().replace(/\s+/g, " ");
+    const type: ExtractedActionItem["type"] | null = value.type === "reminder" ? "reminder" : value.type === "task" ? "task" : null;
+    if (!title || !type || actionTitles.has(normalizedTitle)) return [];
+    actionTitles.add(normalizedTitle);
+    let due_at: string | null = null;
+    if (typeof value.due_at === "string" && value.due_at.trim()) {
+      const parsedDate = new Date(value.due_at);
+      if (!Number.isNaN(parsedDate.getTime())) due_at = parsedDate.toISOString();
+    }
+    return [{
+      title,
+      description: typeof value.description === "string" ? value.description.trim().slice(0, 600) : "",
+      type,
+      due_at,
+      confidence: typeof value.confidence === "number" && Number.isFinite(value.confidence) ? Math.max(0, Math.min(1, value.confidence)) : 0.7,
+      evidence: typeof value.evidence === "string" ? value.evidence.trim().slice(0, 300) : "",
+    }];
+  }).slice(0, 12);
   return {
     extracted_text: parsed.extracted_text.slice(0, 500_000),
     summary: parsed.summary.slice(0, 800),
     tags: parsed.tags.filter((tag): tag is string => typeof tag === "string").map((tag) => tag.slice(0, 60)).slice(0, 8),
     entities,
     relationships,
+    action_items,
   };
 }
 
@@ -229,7 +264,7 @@ async function callOpenAiResponses(content: Record<string, unknown>[], userId: s
       reasoning: { effort: "none" },
       max_output_tokens: 5000,
       safety_identifier: await safetyIdentifier(userId),
-      instructions: "Extract a faithful personal-memory record. Preserve important names, dates, links, headings, and actionable details. Do not invent missing content.",
+      instructions: "Extract a faithful personal-memory record. Preserve important names, dates, links, headings, and actionable details. Extract action items only for explicit commitments, requests, tasks, or reminders in the source; never turn general ideas or facts into tasks. Set due_at only when the source explicitly provides a date or time. Do not invent missing content.",
       input: [{ role: "user", content }],
       text: {
         verbosity: "low",
@@ -278,8 +313,26 @@ async function callOpenAiResponses(content: Record<string, unknown>[], userId: s
                   required: ["source", "target", "type", "confidence", "evidence"],
                 },
               },
+              action_items: {
+                type: "array",
+                maxItems: 12,
+                description: "Explicit source-backed commitments, requests, tasks, or reminders. General ideas and facts are not action items.",
+                items: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    title: { type: "string" },
+                    description: { type: "string" },
+                    type: { type: "string", enum: ["task", "reminder"] },
+                    due_at: { type: ["string", "null"], description: "ISO-8601 date/time only when explicitly stated in the source." },
+                    confidence: { type: "number", minimum: 0, maximum: 1 },
+                    evidence: { type: "string", description: "A short exact supporting phrase from the source." },
+                  },
+                  required: ["title", "description", "type", "due_at", "confidence", "evidence"],
+                },
+              },
             },
-            required: ["extracted_text", "summary", "tags", "entities", "relationships"],
+            required: ["extracted_text", "summary", "tags", "entities", "relationships", "action_items"],
           },
         },
       },
@@ -324,8 +377,8 @@ async function resolveNvidiaResponse(response: Response, apiKey: string, label: 
 }
 
 const NVIDIA_JSON_INSTRUCTIONS = `Return only valid JSON with exactly these keys:
-{"extracted_text":"faithful extracted or transcribed content","summary":"concise factual summary under 120 words","tags":["up to 8 short tags"],"entities":[{"key":"stable_short_key","name":"exact entity name","type":"person|organization|technology|date|url|place|concept","confidence":0.0,"evidence":"short exact supporting phrase"}],"relationships":[{"source":"entity_key","target":"entity_key","type":"short relationship label","confidence":0.0,"evidence":"short exact supporting phrase"}]}
-Extract only entities and relationships explicitly supported by the source. Relationship source and target must reference entity keys. Preserve important names, dates, links, headings, and actionable details. Do not invent missing content.`;
+{"extracted_text":"faithful extracted or transcribed content","summary":"concise factual summary under 120 words","tags":["up to 8 short tags"],"entities":[{"key":"stable_short_key","name":"exact entity name","type":"person|organization|technology|date|url|place|concept","confidence":0.0,"evidence":"short exact supporting phrase"}],"relationships":[{"source":"entity_key","target":"entity_key","type":"short relationship label","confidence":0.0,"evidence":"short exact supporting phrase"}],"action_items":[{"title":"clear action","description":"brief source-backed context","type":"task|reminder","due_at":null,"confidence":0.0,"evidence":"short exact supporting phrase"}]}
+Extract only entities and relationships explicitly supported by the source. Relationship source and target must reference entity keys. Extract action items only for explicit commitments, requests, tasks, or reminders; never convert general ideas or facts into tasks. Use an ISO-8601 due_at only when the source explicitly states a date or time, otherwise null. Preserve important names, dates, links, headings, and actionable details. Do not invent missing content.`;
 
 async function callNvidiaChat(
   content: string | Record<string, unknown>[],
@@ -701,6 +754,12 @@ async function processJob(admin: any, job: ProcessingJob) {
   });
   if (graphError) throw new Error(graphError.message);
 
+  const { error: actionItemError } = await admin.rpc("replace_memory_action_items", {
+    target_job_id: job.id,
+    result_action_items: result.action_items,
+  });
+  if (actionItemError) throw new Error(actionItemError.message);
+
   const { error: completeError } = await admin.rpc("complete_processing_job", {
     target_job_id: job.id,
     result_text: result.extracted_text,
@@ -712,6 +771,7 @@ async function processJob(admin: any, job: ProcessingJob) {
       processed_job_type: job.job_type,
       extracted_entity_count: result.entities.length,
       extracted_relationship_count: result.relationships.length,
+      extracted_action_item_count: result.action_items.length,
     },
   });
   if (completeError) throw new Error(completeError.message);
