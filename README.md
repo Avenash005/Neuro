@@ -18,6 +18,8 @@ Neuron is a personal knowledge workspace for capturing notes, links, files, and 
 - Versioned SQL migrations and typed database access
 - Error boundary, unit tests, and GitHub Actions CI
 - Live private hybrid search across exact terms and semantic meaning
+- Private Activity page with 7-day, 30-day, and all-time work history
+- Functional navigation, Library filters, collection creation, favorites, and history links
 - Strict TypeScript and production builds
 
 The production roadmap is in [docs/PRODUCTION_PLAN.md](docs/PRODUCTION_PLAN.md).
@@ -25,6 +27,7 @@ Phase 2A dashboard setup is in [docs/PHASE_2A_SETUP.md](docs/PHASE_2A_SETUP.md).
 Phase 2B capture setup is in [docs/PHASE_2B_SETUP.md](docs/PHASE_2B_SETUP.md).
 Phase 2B worker deployment is in [docs/PHASE_2B_WORKER.md](docs/PHASE_2B_WORKER.md).
 Phase 2C hybrid search is in [docs/PHASE_2C_SEARCH.md](docs/PHASE_2C_SEARCH.md).
+Activity history and interaction behavior is in [docs/ACTIVITY_HISTORY.md](docs/ACTIVITY_HISTORY.md).
 
 ## Branches
 
@@ -33,7 +36,8 @@ Phase 2C hybrid search is in [docs/PHASE_2C_SEARCH.md](docs/PHASE_2C_SEARCH.md).
 | `main` | Stable Phase 1 MVP baseline |
 | `phase-2-production` | Integration branch for production architecture and completed Phase 2 features |
 | `feature/universal-capture` | Completed Phase 2B private capture milestone |
-| `feature/semantic-search` | Active Phase 2C full-text, vector, and hybrid retrieval work |
+| `feature/semantic-search` | Completed Phase 2C full-text, vector, and hybrid retrieval milestone |
+| `feature/activity-history` | Activity timeline and complete UI interaction pass |
 
 For future work, create focused branches from `phase-2-production`, such as `feature/file-upload`, `feature/semantic-search`, or `fix/mobile-capture`.
 
@@ -47,6 +51,7 @@ src/
 ├── data/                   # Temporary mock content for unfinished APIs
 ├── features/
 │   ├── dashboard/          # Home dashboard and activity widgets
+│   ├── activity/           # Real past-work history, charts, and date grouping
 │   └── views/              # Library, collections, and graph screens
 ├── lib/
 │   └── supabase.ts         # Supabase client and memory data access
@@ -61,6 +66,7 @@ supabase/
 └── schema.sql              # Current database schema reference
 
 docs/
+├── ACTIVITY_HISTORY.md     # Past-work page and interaction map
 ├── PHASE_2A_SETUP.md       # Required Supabase dashboard configuration
 ├── PHASE_2B_WORKER.md      # NVIDIA processing worker deployment
 ├── PHASE_2C_SEARCH.md      # Hybrid-search architecture and deployment
@@ -125,6 +131,7 @@ These commands run frontend type-checking, unit tests, the production build, and
 - Change global navigation or header: `src/components/layout/AppLayout.tsx`
 - Change capture/search/assistant dialogs: `src/components/overlays/AppOverlays.tsx`
 - Change dashboard widgets: `src/features/dashboard/Dashboard.tsx`
+- Change past-work history: `src/features/activity/ActivityView.tsx`
 - Change Library, Collections, or Graph: `src/features/views/FeatureViews.tsx`
 - Change Supabase queries: `src/lib/supabase.ts`
 - Change upload validation: `src/lib/uploads.ts`

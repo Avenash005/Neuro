@@ -1,6 +1,7 @@
 import {
   ArrowRight,
   Bell,
+  Clock3,
   Command,
   FolderKanban,
   Home,
@@ -30,13 +31,16 @@ type SidebarProps = {
   profileName: string;
   profileSubtitle: string;
   onProfileClick: () => void;
+  onSearch: (query: string) => void;
+  onSettingsClick: () => void;
 };
 
-export function Sidebar({ activeView, setActiveView, openCapture, profileName, profileSubtitle, onProfileClick }: SidebarProps) {
+export function Sidebar({ activeView, setActiveView, openCapture, profileName, profileSubtitle, onProfileClick, onSearch, onSettingsClick }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(false);
   const nav = [
     { label: "Home" as View, icon: Home },
     { label: "Library" as View, icon: Layers3 },
+    { label: "Activity" as View, icon: Clock3 },
     { label: "Collections" as View, icon: FolderKanban },
     { label: "Graph" as View, icon: Network },
   ];
@@ -57,14 +61,14 @@ export function Sidebar({ activeView, setActiveView, openCapture, profileName, p
       </nav>
       {!collapsed && (
         <div className="sidebar-section">
-          <div className="section-label"><span>Favorites</span><Plus size={14} /></div>
-          <button><span className="nav-dot violet" />Neuron</button>
-          <button><span className="nav-dot green" />Web development</button>
-          <button><span className="nav-dot orange" />Startup library</button>
+          <div className="section-label"><span>Favorites</span><button aria-label="Create collection" onClick={() => setActiveView("Collections")}><Plus size={14} /></button></div>
+          <button onClick={() => onSearch("Neuron")}><span className="nav-dot violet" />Neuron</button>
+          <button onClick={() => onSearch("Web development")}><span className="nav-dot green" />Web development</button>
+          <button onClick={() => onSearch("Startup")}><span className="nav-dot orange" />Startup library</button>
         </div>
       )}
       <div className="sidebar-bottom">
-        <button title="Settings"><Settings size={19} />{!collapsed && <span>Settings</span>}</button>
+        <button title="Settings" onClick={onSettingsClick}><Settings size={19} />{!collapsed && <span>Settings</span>}</button>
         <button className="profile-button" title="Profile and account" onClick={onProfileClick}><span className="avatar">{profileName.slice(0, 2).toUpperCase()}</span>{!collapsed && <span className="profile-copy"><strong>{profileName}</strong><small>{profileSubtitle}</small></span>}</button>
       </div>
     </aside>
@@ -88,9 +92,10 @@ type HeaderProps = {
   openAssistant: () => void;
   openMobileNav: () => void;
   backendStatus: BackendStatus;
+  openActivity: () => void;
 };
 
-export function Header({ onSearch, openAssistant, openMobileNav, backendStatus }: HeaderProps) {
+export function Header({ onSearch, openAssistant, openMobileNav, backendStatus, openActivity }: HeaderProps) {
   const statusLabel = backendStatus === "connected" ? "Supabase synced" : backendStatus === "connecting" ? "Connecting" : backendStatus === "error" ? "Setup needed" : "Local mode";
   return (
     <header className="topbar">
@@ -99,7 +104,7 @@ export function Header({ onSearch, openAssistant, openMobileNav, backendStatus }
       <div className="header-search"><SearchBox onSearch={onSearch} /></div>
       <div className="top-actions">
         <span className={`sync-status ${backendStatus}`}><i />{statusLabel}</span>
-        <button className="icon-button notification" aria-label="Notifications"><Bell size={19} /><span /></button>
+        <button className="icon-button notification" aria-label="Open recent activity" onClick={openActivity}><Bell size={19} /><span /></button>
         <button className="ask-ai" onClick={openAssistant}><Sparkles size={16} />Ask Neuron</button>
       </div>
     </header>

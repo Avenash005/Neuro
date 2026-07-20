@@ -5,6 +5,7 @@ import type { User } from "@supabase/supabase-js";
 import { Header, Sidebar } from "./components/layout/AppLayout";
 import { AssistantPanel, CaptureModal, SearchModal } from "./components/overlays/AppOverlays";
 import { AuthModal } from "./features/auth/AuthModal";
+import { ActivityView } from "./features/activity/ActivityView";
 import { Dashboard } from "./features/dashboard/Dashboard";
 import { CollectionsView, GraphView, LibraryView } from "./features/views/FeatureViews";
 import {
@@ -22,7 +23,6 @@ import {
   DuplicateMemoryError,
   type MemoryInput,
   type MemoryRecord,
-  type MemorySearchResult,
 } from "./lib/supabase";
 import type { BackendStatus, View } from "./types/app";
 import type { SignedUploadOptions } from "./lib/signedUpload";
@@ -48,9 +48,10 @@ export default function App() {
 
   const content = useMemo(() => {
     if (activeView === "Library") return <LibraryView onSearch={search} openCapture={openCapture} memories={syncedMemories} onRetry={retryProcessing} onDownload={downloadFile} onDelete={removeMemory} openMemoryId={openMemoryId} onOpenedMemory={() => setOpenMemoryId(null)} />;
-    if (activeView === "Collections") return <CollectionsView />;
-    if (activeView === "Graph") return <GraphView />;
-    return <Dashboard onSearch={search} openCapture={openCapture} openAssistant={() => setAssistantOpen(true)} />;
+    if (activeView === "Activity") return <ActivityView memories={syncedMemories} onOpenMemory={openSearchResult} openCapture={openCapture} />;
+    if (activeView === "Collections") return <CollectionsView onSearch={search} />;
+    if (activeView === "Graph") return <GraphView openAssistant={() => setAssistantOpen(true)} />;
+    return <Dashboard onSearch={search} openCapture={openCapture} openAssistant={() => setAssistantOpen(true)} openActivity={() => setActiveView("Activity")} openLibrary={() => setActiveView("Library")} memories={syncedMemories} onOpenMemory={openSearchResult} />;
   }, [activeView, syncedMemories, openMemoryId]);
 
   useEffect(() => {
@@ -155,7 +156,7 @@ export default function App() {
     }
   }
 
-  function openSearchResult(memory: MemorySearchResult) {
+  function openSearchResult(memory: MemoryRecord) {
     setSyncedMemories((current) => current.some((item) => item.id === memory.id) ? current : [memory, ...current]);
     setSearchQuery(null);
     setOpenMemoryId(memory.id);
@@ -194,10 +195,10 @@ export default function App() {
     <div className="app-shell">
       <div className={mobileNav ? "mobile-sidebar open" : "mobile-sidebar"}>
         <div className="mobile-sidebar-backdrop" onClick={() => setMobileNav(false)} />
-        <Sidebar activeView={activeView} setActiveView={(view) => { setActiveView(view); setMobileNav(false); }} openCapture={() => { setCaptureOpen(true); setMobileNav(false); }} profileName={profileName} profileSubtitle={profileSubtitle} onProfileClick={() => { setAuthOpen(true); setMobileNav(false); }} />
+        <Sidebar activeView={activeView} setActiveView={(view) => { setActiveView(view); setMobileNav(false); }} openCapture={() => { setCaptureOpen(true); setMobileNav(false); }} profileName={profileName} profileSubtitle={profileSubtitle} onProfileClick={() => { setAuthOpen(true); setMobileNav(false); }} onSearch={(query) => { search(query); setMobileNav(false); }} onSettingsClick={() => { setAuthOpen(true); setMobileNav(false); }} />
       </div>
-      <div className="desktop-sidebar"><Sidebar activeView={activeView} setActiveView={setActiveView} openCapture={openCapture} profileName={profileName} profileSubtitle={profileSubtitle} onProfileClick={() => setAuthOpen(true)} /></div>
-      <div className="workspace"><Header onSearch={search} openAssistant={() => setAssistantOpen(true)} openMobileNav={() => setMobileNav(true)} backendStatus={backendStatus} />{content}</div>
+      <div className="desktop-sidebar"><Sidebar activeView={activeView} setActiveView={setActiveView} openCapture={openCapture} profileName={profileName} profileSubtitle={profileSubtitle} onProfileClick={() => setAuthOpen(true)} onSearch={search} onSettingsClick={() => setAuthOpen(true)} /></div>
+      <div className="workspace"><Header onSearch={search} openAssistant={() => setAssistantOpen(true)} openMobileNav={() => setMobileNav(true)} backendStatus={backendStatus} openActivity={() => setActiveView("Activity")} />{content}</div>
 
       <AnimatePresence>
         {authOpen && <motion.div className="modal-layer" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onMouseDown={(event) => { if (event.target === event.currentTarget) setAuthOpen(false); }}><AuthModal user={authUser} onClose={() => setAuthOpen(false)} /></motion.div>}

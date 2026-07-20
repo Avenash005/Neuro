@@ -56,13 +56,24 @@ function memoryToLibraryItem(memory: MemoryRecord): LibraryItem {
 
 export function LibraryView({ onSearch, openCapture, memories, onRetry, onDownload, onDelete, openMemoryId, onOpenedMemory }: LibraryViewProps) {
   const [selection, setSelection] = useState<LibrarySelection | null>(null);
+  const [typeFilter, setTypeFilter] = useState("all");
+  const [sortOrder, setSortOrder] = useState("recent");
+  const [favorites, setFavorites] = useState(() => new Set<string>());
   const syncedItems: LibraryItem[] = memories.map(memoryToLibraryItem);
-  const allItems = [
-    ...syncedItems,
+  const previewItems = [
     ...recentItems,
     { title: "Local-first software", description: "Principles for resilient apps that work without a network connection.", meta: "Article · 9 min", tag: "Architecture", icon: Globe2, color: "green" },
     { title: "Vector search experiments", description: "Benchmarks and learnings from hybrid semantic retrieval.", meta: "Code note · 6 blocks", tag: "AI", icon: Code2, color: "violet" },
   ];
+  const allItems = memories.length ? syncedItems : previewItems;
+  const visibleItems = allItems
+    .filter((item) => typeFilter === "all" || memories.find((memory) => memory.id === item.id)?.kind.toLowerCase() === typeFilter)
+    .sort((left, right) => {
+      if (sortOrder === "title") return left.title.localeCompare(right.title);
+      const leftDate = memories.find((memory) => memory.id === left.id)?.created_at || "";
+      const rightDate = memories.find((memory) => memory.id === right.id)?.created_at || "";
+      return sortOrder === "oldest" ? leftDate.localeCompare(rightDate) : rightDate.localeCompare(leftDate);
+    });
 
   useEffect(() => {
     if (!selection) return;
@@ -87,12 +98,14 @@ export function LibraryView({ onSearch, openCapture, memories, onRetry, onDownlo
       <PageIntro eyebrow="Your memory" title="Library" description="Everything you’ve saved, understood and connected." action={<button className="primary-action" onClick={openCapture}><Plus size={17} /> Add memory</button>} />
       <div className="library-toolbar">
         <div className="compact-search"><Search size={17} /><input placeholder="Search your library" onKeyDown={(event) => { if (event.key === "Enter") onSearch(event.currentTarget.value); }} /></div>
-        <button><Grid2X2 size={16} /> All types <ChevronDown size={14} /></button><button>Recently added <ChevronDown size={14} /></button>
+        <label className="library-select"><Grid2X2 size={16} /><select aria-label="Filter memory type" value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)}><option value="all">All types</option><option value="note">Notes</option><option value="upload">Uploads</option><option value="link">Links</option><option value="voice">Voice</option></select><ChevronDown size={14} /></label>
+        <label className="library-select"><select aria-label="Sort memories" value={sortOrder} onChange={(event) => setSortOrder(event.target.value)}><option value="recent">Recently added</option><option value="oldest">Oldest first</option><option value="title">Title A–Z</option></select><ChevronDown size={14} /></label>
       </div>
       <div className="library-list">
-        {allItems.map((item, index) => {
+        {visibleItems.map((item, index) => {
           const Icon = item.icon;
           const memory = item.id ? memories.find((candidate) => candidate.id === item.id) : undefined;
+          const favoriteKey = item.id || item.title;
           return (
             <article key={item.id ?? `${item.title}-${index}`} className="library-row">
               <button className="library-open-button" onClick={() => setSelection({ item, memory })} aria-label={`Open ${item.title}`}>
@@ -104,7 +117,7 @@ export function LibraryView({ onSearch, openCapture, memories, onRetry, onDownlo
                 ? <button className="library-row-action" title="Retry processing" aria-label={`Retry ${item.title}`} onClick={() => void onRetry(item.id!)}><RotateCw size={16} /></button>
                 : item.storagePath && item.originalFilename
                   ? <button className="library-row-action" title="Download private file" aria-label={`Download ${item.originalFilename}`} onClick={() => void onDownload(item.storagePath!, item.originalFilename!)}><Download size={16} /></button>
-                  : <button className="library-row-action" title="Favorite" aria-label={`Favorite ${item.title}`}><Star size={16} /></button>}
+                  : <button className={`library-row-action ${favorites.has(favoriteKey) ? "starred" : ""}`} title="Favorite" aria-label={`Favorite ${item.title}`} onClick={() => setFavorites((current) => { const next = new Set(current); if (next.has(favoriteKey)) next.delete(favoriteKey); else next.add(favoriteKey); return next; })}><Star size={16} fill={favorites.has(favoriteKey) ? "currentColor" : "none"} /></button>}
             </article>
           );
         })}
@@ -178,19 +191,31 @@ function MemoryDetail({ selection, onClose, onRetry, onDownload, onDelete }: {
   );
 }
 
-export function CollectionsView() {
+export function CollectionsView({ onSearch }: { onSearch: (query: string) => void }) {
+  const [customCollections, setCustomCollections] = useState<typeof collections>([]);
+  const [creating, setCreating] = useState(false);
+  const [name, setName] = useState("");
+  const visibleCollections = [...customCollections, ...collections];
+  const createCollection = () => {
+    const normalized = name.trim();
+    if (!normalized) return;
+    setCustomCollections((current) => [{ name: normalized, count: 0, color: "#6657d9", initials: normalized.slice(0, 2).toUpperCase() }, ...current]);
+    setName("");
+    setCreating(false);
+  };
   return (
     <main className="page-content">
-      <PageIntro eyebrow="Organized by AI" title="Collections" description="Living spaces that grow and reorganize with your knowledge." action={<button className="primary-action"><Plus size={17} /> New collection</button>} />
-      <div className="collections-grid">{collections.map((collection, index) => <motion.article key={collection.name} className="collection-card" whileHover={{ y: -4 }}><div className="collection-visual" style={{ background: `linear-gradient(145deg, ${collection.color}18, ${collection.color}08)` }}><span style={{ backgroundColor: collection.color }}>{collection.initials}</span><div className="paper-stack one" /><div className="paper-stack two" /></div><div className="collection-copy"><span>{index < 2 ? "Favorite" : "Smart collection"}</span><h3>{collection.name}</h3><p>{collection.count} memories · Updated today</p></div></motion.article>)}</div>
+      <PageIntro eyebrow="Organized by AI" title="Collections" description="Living spaces that grow and reorganize with your knowledge." action={<button className="primary-action" onClick={() => setCreating(true)}><Plus size={17} /> New collection</button>} />
+      {creating && <form className="collection-create" onSubmit={(event) => { event.preventDefault(); createCollection(); }}><input autoFocus value={name} onChange={(event) => setName(event.target.value)} placeholder="Collection name" /><button className="primary-action" type="submit">Create</button><button type="button" onClick={() => { setCreating(false); setName(""); }}>Cancel</button></form>}
+      <div className="collections-grid">{visibleCollections.map((collection, index) => <motion.button type="button" key={`${collection.name}-${index}`} className="collection-card" whileHover={{ y: -4 }} onClick={() => onSearch(collection.name)}><div className="collection-visual" style={{ background: `linear-gradient(145deg, ${collection.color}18, ${collection.color}08)` }}><span style={{ backgroundColor: collection.color }}>{collection.initials}</span><div className="paper-stack one" /><div className="paper-stack two" /></div><div className="collection-copy"><span>{index < 2 ? "Favorite" : "Smart collection"}</span><h3>{collection.name}</h3><p>{collection.count} memories · Open matching memories</p></div></motion.button>)}</div>
     </main>
   );
 }
 
-export function GraphView() {
+export function GraphView({ openAssistant }: { openAssistant: () => void }) {
   return (
     <main className="page-content graph-page">
-      <PageIntro eyebrow="42 connections this week" title="Knowledge graph" description="See how your ideas, projects and sources shape each other." action={<button className="primary-action"><Sparkles size={17} /> Find connections</button>} />
+      <PageIntro eyebrow="42 connections this week" title="Knowledge graph" description="See how your ideas, projects and sources shape each other." action={<button className="primary-action" onClick={openAssistant}><Sparkles size={17} /> Find connections</button>} />
       <div className="graph-canvas">
         <div className="graph-tip"><Sparkles size={15} /><span>Neuron found 3 new links in your recent notes</span><X size={14} /></div>
         <svg viewBox="0 0 900 520" role="img" aria-label="Interactive knowledge graph">
