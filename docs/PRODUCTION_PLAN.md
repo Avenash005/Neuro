@@ -169,6 +169,7 @@ Goal: turn stored information into useful action.
 - [ ] Implement spaced-repetition scheduling
 - [x] Extract tasks and reminders with user confirmation
 - [x] Generate daily and weekly recaps
+- [x] Add privacy-scoped conversation and meeting preparation with citations
 
 ### Phase 3 — Scale and ecosystem
 

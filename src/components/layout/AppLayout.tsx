@@ -42,6 +42,7 @@ export function Sidebar({ activeView, setActiveView, openCapture, profileName, p
   const [collapsed, setCollapsed] = useState(false);
   const nav = [
     { label: "Home" as View, icon: Home },
+    { label: "Sidekick" as View, icon: Sparkles },
     { label: "Library" as View, icon: Layers3 },
     { label: "Tasks" as View, icon: ListTodo },
     { label: "Study" as View, icon: GraduationCap },

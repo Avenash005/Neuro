@@ -25,6 +25,7 @@ Neuron is a personal knowledge workspace for capturing notes, links, files, and 
 - Source-backed task and reminder suggestions with explicit accept/dismiss confirmation
 - Cost-free daily, weekly, and monthly recaps generated from real private activity
 - Source-backed flashcards and multiple-choice Study Mode with controlled legacy analysis
+- Privacy-scoped Neuron Sidekick for grounded conversation and meeting preparation
 - Strict TypeScript and production builds
 
 The production roadmap is in [docs/PRODUCTION_PLAN.md](docs/PRODUCTION_PLAN.md).
@@ -40,6 +41,7 @@ Entity extraction and provenance are documented in [docs/ENTITY_EXTRACTION.md](d
 Task extraction and confirmation are documented in [docs/ACTION_ITEMS.md](docs/ACTION_ITEMS.md).
 Daily and weekly recap behavior is documented in [docs/DAILY_WEEKLY_RECAPS.md](docs/DAILY_WEEKLY_RECAPS.md).
 Flashcards, quizzes, and controlled study analysis are documented in [docs/STUDY_MODE.md](docs/STUDY_MODE.md).
+Conversation and meeting preparation are documented in [docs/LIVE_ASSIST.md](docs/LIVE_ASSIST.md).
 
 ## Branches
 
@@ -58,6 +60,7 @@ Flashcards, quizzes, and controlled study analysis are documented in [docs/STUDY
 | `feature/action-items` | Confirmed, source-backed tasks and reminders |
 | `feature/daily-weekly-recaps` | Real activity summaries, themes, streaks, and completed work |
 | `feature/study-mode` | Private source-backed flashcards and quizzes |
+| `feature/live-assist` | Selected-memory conversation and meeting preparation |
 
 For future work, create focused branches from `phase-2-production`, such as `feature/file-upload`, `feature/semantic-search`, or `fix/mobile-capture`.
 

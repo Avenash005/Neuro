@@ -11,6 +11,7 @@ import { KnowledgeGraphView } from "./features/graph/KnowledgeGraphView";
 import { TasksView } from "./features/tasks/TasksView";
 import { RecapsView } from "./features/recaps/RecapsView";
 import { StudyView } from "./features/study/StudyView";
+import { SidekickView } from "./features/sidekick/SidekickView";
 import { CollectionsView, LibraryView } from "./features/views/FeatureViews";
 import {
   addMemoryToCollection,
@@ -81,6 +82,7 @@ export default function App() {
     if (activeView === "Tasks") return <TasksView items={actionItems} memories={syncedMemories} onChangeStatus={changeActionItemStatus} onOpenMemory={openSearchResult} />;
     if (activeView === "Recaps") return <RecapsView memories={syncedMemories} actionItems={actionItems} onOpenMemory={openSearchResult} openCapture={openCapture} openTasks={() => setActiveView("Tasks")} />;
     if (activeView === "Study") return <StudyView cards={studyCards} memories={syncedMemories} onOpenMemory={openSearchResult} onAnalyzeMemories={analyzeStudyMemories} />;
+    if (activeView === "Sidekick") return <SidekickView memories={syncedMemories} collections={syncedCollections} onOpenMemory={openSearchResult} />;
     return <Dashboard onSearch={search} openCapture={openCapture} openAssistant={() => setAssistantOpen(true)} openActivity={() => setActiveView("Activity")} openLibrary={() => setActiveView("Library")} openTasks={() => setActiveView("Tasks")} openRecaps={() => setActiveView("Recaps")} memories={syncedMemories} actionItems={actionItems} onOpenMemory={openSearchResult} onToggleFavorite={toggleFavorite} onCompleteTask={(id) => changeActionItemStatus(id, "completed")} />;
   }, [activeView, syncedMemories, syncedCollections, knowledgeEntities, actionItems, studyCards, openMemoryId]);
 
