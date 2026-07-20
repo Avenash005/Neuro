@@ -21,6 +21,7 @@ import { SearchBox } from "../../components/layout/AppLayout";
 import { recentItems } from "../../data/mockData";
 import type { LibraryItem } from "../../types/app";
 import type { ActionItemRecord, MemoryRecord } from "../../lib/supabase";
+import { buildWorkspaceRecap } from "../recaps/recaps";
 
 type DashboardProps = {
   onSearch: (query: string) => void;
@@ -29,6 +30,7 @@ type DashboardProps = {
   openActivity: () => void;
   openLibrary: () => void;
   openTasks: () => void;
+  openRecaps: () => void;
   memories: MemoryRecord[];
   actionItems: ActionItemRecord[];
   onOpenMemory: (memory: MemoryRecord) => void;
@@ -36,16 +38,12 @@ type DashboardProps = {
   onCompleteTask: (taskId: string) => Promise<void>;
 };
 
-export function Dashboard({ onSearch, openCapture, openAssistant, openActivity, openLibrary, openTasks, memories, actionItems, onOpenMemory, onToggleFavorite, onCompleteTask }: DashboardProps) {
+export function Dashboard({ onSearch, openCapture, openAssistant, openActivity, openLibrary, openTasks, openRecaps, memories, actionItems, onOpenMemory, onToggleFavorite, onCompleteTask }: DashboardProps) {
   const today = new Intl.DateTimeFormat("en", { weekday: "long", month: "long", day: "numeric" }).format(new Date());
   const focusTasks = actionItems.filter((item) => item.status === "accepted").slice(0, 3);
   const suggestionCount = actionItems.filter((item) => item.status === "suggested").length;
-  const thisWeek = useMemo(() => {
-    const threshold = new Date();
-    threshold.setDate(threshold.getDate() - 6);
-    threshold.setHours(0, 0, 0, 0);
-    return memories.filter((memory) => new Date(memory.created_at) >= threshold);
-  }, [memories]);
+  const weeklyRecap = useMemo(() => buildWorkspaceRecap(memories, actionItems, "week"), [memories, actionItems]);
+  const leadingThemes = weeklyRecap.topTags.slice(0, 2);
   const activeDateKeys = new Set(memories.map((memory) => new Date(memory.created_at).toDateString()));
   const weekDates = Array.from({ length: 7 }, (_, index) => {
     const date = new Date();
@@ -70,16 +68,16 @@ export function Dashboard({ onSearch, openCapture, openAssistant, openActivity, 
       <section className="dashboard-grid">
         <motion.article className="card daily-brief" initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: .08 }}>
           <div className="card-heading">
-            <div><span className="card-kicker"><Sparkles size={14} /> Daily brief</span><h2>Your ideas are starting to connect</h2></div>
-            <button className="more-link" onClick={openAssistant}>Explore <ArrowRight size={15} /></button>
+            <div><span className="card-kicker"><Sparkles size={14} /> Weekly brief</span><h2>{weeklyRecap.memories.length ? "Your week, at a glance" : "Your recap is ready when you are"}</h2></div>
+            <button className="more-link" onClick={openRecaps}>Explore <ArrowRight size={15} /></button>
           </div>
-          <p>You saved <strong>{thisWeek.length} new {thisWeek.length === 1 ? "item" : "items"}</strong> this week. Use Activity to revisit the work and ideas you captured each day.</p>
-          <div className="connection-row">
-            <div className="connection-item"><span className="mini-icon purple"><Code2 size={17} /></span><span><strong>React patterns</strong><small>12 connected items</small></span></div>
+          <p>{weeklyRecap.narrative}</p>
+          {leadingThemes.length > 0 && <div className="connection-row">
+            <div className="connection-item"><span className="mini-icon purple"><Code2 size={17} /></span><span><strong>{leadingThemes[0].label}</strong><small>{leadingThemes[0].count} tagged {leadingThemes[0].count === 1 ? "memory" : "memories"}</small></span></div>
             <div className="connector"><span /><Zap size={14} /><span /></div>
-            <div className="connection-item"><span className="mini-icon green"><Brain size={17} /></span><span><strong>Project Neuron</strong><small>18 connected items</small></span></div>
-          </div>
-          <div className="insight"><span className="insight-icon"><Sparkles size={15} /></span><p><strong>A useful connection:</strong> The local-first sync approach you bookmarked could simplify Neuron’s offline mode.</p></div>
+            <div className="connection-item"><span className="mini-icon green"><Brain size={17} /></span><span><strong>{leadingThemes[1]?.label || `${weeklyRecap.activeDays} active ${weeklyRecap.activeDays === 1 ? "day" : "days"}`}</strong><small>{leadingThemes[1] ? `${leadingThemes[1].count} tagged ${leadingThemes[1].count === 1 ? "memory" : "memories"}` : `${weeklyRecap.completed.length} actions completed`}</small></span></div>
+          </div>}
+          <div className="insight"><span className="insight-icon"><Sparkles size={15} /></span><p><strong>{weeklyRecap.highlight ? "Worth revisiting:" : "Build your recap:"}</strong> {weeklyRecap.highlight ? (weeklyRecap.highlight.summary || weeklyRecap.highlight.title) : "Capture a thought, link, file, or voice note and Neuron will reflect your real activity here."}</p></div>
         </motion.article>
 
         <motion.article className="card focus-card" initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: .12 }}>
@@ -111,7 +109,7 @@ export function Dashboard({ onSearch, openCapture, openAssistant, openActivity, 
           </div>
         </article>
         <article className="card streak-card">
-          <div className="streak-top"><div className="streak-icon"><Zap size={20} /></div><span>Learning streak</span><strong>12 days</strong><p>You’ve added something meaningful every day.</p></div>
+          <div className="streak-top"><div className="streak-icon"><Zap size={20} /></div><span>Learning streak</span><strong>{weeklyRecap.streak} {weeklyRecap.streak === 1 ? "day" : "days"}</strong><p>{weeklyRecap.streak ? "You’re building a consistent capture habit." : "Capture something today to begin a streak."}</p></div>
           <div className="week-dots">{weekDates.map((day, index) => <div key={`${day.label}-${index}`}><span className={day.active ? "filled" : day.today ? "today" : ""}>{day.active && <Check size={11} />}</span><small>{day.label}</small></div>)}</div>
           <button onClick={openCapture}>Keep it going <Plus size={15} /></button>
         </article>
