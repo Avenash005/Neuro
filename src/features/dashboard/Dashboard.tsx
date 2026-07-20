@@ -30,9 +30,10 @@ type DashboardProps = {
   openLibrary: () => void;
   memories: MemoryRecord[];
   onOpenMemory: (memory: MemoryRecord) => void;
+  onToggleFavorite: (memoryId: string, isFavorite: boolean) => Promise<void>;
 };
 
-export function Dashboard({ onSearch, openCapture, openAssistant, openActivity, openLibrary, memories, onOpenMemory }: DashboardProps) {
+export function Dashboard({ onSearch, openCapture, openAssistant, openActivity, openLibrary, memories, onOpenMemory, onToggleFavorite }: DashboardProps) {
   const [checkedTasks, setCheckedTasks] = useState<number[]>([1]);
   const today = new Intl.DateTimeFormat("en", { weekday: "long", month: "long", day: "numeric" }).format(new Date());
   const toggleTask = (index: number) => setCheckedTasks((current) => current.includes(index) ? current.filter((item) => item !== index) : [...current, index]);
@@ -94,7 +95,7 @@ export function Dashboard({ onSearch, openCapture, openAssistant, openActivity, 
       <section className="section-block">
         <div className="section-header"><div><h2>Pick up where you left off</h2><p>Your most recent thoughts and discoveries</p></div><button className="text-button" onClick={openLibrary}>View library <ArrowRight size={15} /></button></div>
         <div className="recent-grid">
-          {memories.length ? memories.slice(0, 3).map((memory, index) => <MemoryRecentCard key={memory.id} memory={memory} index={index} onOpen={() => onOpenMemory(memory)} />) : recentItems.map((item, index) => <RecentCard key={item.title} item={item} index={index} onOpen={() => onSearch(item.title)} />)}
+          {memories.length ? memories.slice(0, 3).map((memory, index) => <MemoryRecentCard key={memory.id} memory={memory} index={index} onOpen={() => onOpenMemory(memory)} onToggleFavorite={(favorite) => onToggleFavorite(memory.id, favorite)} />) : recentItems.map((item, index) => <RecentCard key={item.title} item={item} index={index} onOpen={() => onSearch(item.title)} />)}
         </div>
       </section>
 
@@ -117,18 +118,19 @@ export function Dashboard({ onSearch, openCapture, openAssistant, openActivity, 
   );
 }
 
-function RecentCard({ item, index, onOpen }: { item: LibraryItem; index: number; onOpen: () => void }) {
+function RecentCard({ item, index, onOpen, favoriteOverride, onToggleFavorite }: { item: LibraryItem; index: number; onOpen: () => void; favoriteOverride?: boolean; onToggleFavorite?: (favorite: boolean) => void }) {
   const Icon = item.icon;
-  const [favorite, setFavorite] = useState(index === 2);
+  const [localFavorite, setLocalFavorite] = useState(index === 2);
+  const favorite = favoriteOverride ?? localFavorite;
   return (
     <motion.article className="recent-card" role="button" tabIndex={0} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: .15 + index * .05 }} whileHover={{ y: -4 }} onClick={onOpen} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") onOpen(); }}>
-      <div className="recent-top"><span className={`file-icon ${item.color}`}><Icon size={19} /></span><button className={favorite ? "starred" : ""} onClick={(event) => { event.stopPropagation(); setFavorite(!favorite); }} aria-label="Favorite"><Star size={17} fill={favorite ? "currentColor" : "none"} /></button></div>
+      <div className="recent-top"><span className={`file-icon ${item.color}`}><Icon size={19} /></span><button className={favorite ? "starred" : ""} onClick={(event) => { event.stopPropagation(); if (onToggleFavorite) onToggleFavorite(!favorite); else setLocalFavorite(!favorite); }} aria-label="Favorite"><Star size={17} fill={favorite ? "currentColor" : "none"} /></button></div>
       <span className="item-tag">{item.tag}</span><h3>{item.title}</h3><p>{item.description}</p><div className="recent-meta"><span>{item.meta}</span><span>2d ago</span></div>
     </motion.article>
   );
 }
 
-function MemoryRecentCard({ memory, index, onOpen }: { memory: MemoryRecord; index: number; onOpen: () => void }) {
+function MemoryRecentCard({ memory, index, onOpen, onToggleFavorite }: { memory: MemoryRecord; index: number; onOpen: () => void; onToggleFavorite: (favorite: boolean) => void }) {
   const item: LibraryItem = {
     title: memory.title,
     description: memory.summary || memory.content || memory.extracted_text || `${memory.kind} saved to Neuron`,
@@ -137,7 +139,7 @@ function MemoryRecentCard({ memory, index, onOpen }: { memory: MemoryRecord; ind
     icon: memory.kind === "Link" ? Link2 : memory.kind === "Voice" ? Mic : BookOpen,
     color: memory.kind === "Link" ? "green" : memory.kind === "Voice" ? "orange" : "violet",
   };
-  return <RecentCard item={item} index={index} onOpen={onOpen} />;
+  return <RecentCard item={item} index={index} onOpen={onOpen} favoriteOverride={memory.is_favorite} onToggleFavorite={onToggleFavorite} />;
 }
 
 function TimelineItem({ time, icon: Icon, title, detail, onClick }: { time: string; icon: LucideIcon; title: string; detail: string; onClick: () => void }) {

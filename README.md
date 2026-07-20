@@ -19,7 +19,7 @@ Neuron is a personal knowledge workspace for capturing notes, links, files, and 
 - Error boundary, unit tests, and GitHub Actions CI
 - Live private hybrid search across exact terms and semantic meaning
 - Private Activity page with 7-day, 30-day, and all-time work history
-- Functional navigation, Library filters, collection creation, favorites, and history links
+- Functional navigation, Library filters, and owner-scoped favorites and collections that sync across devices
 - Grounded Ask Neuron answers with validated, clickable private-memory citations
 - Strict TypeScript and production builds
 
@@ -30,6 +30,7 @@ Phase 2B worker deployment is in [docs/PHASE_2B_WORKER.md](docs/PHASE_2B_WORKER.
 Phase 2C hybrid search is in [docs/PHASE_2C_SEARCH.md](docs/PHASE_2C_SEARCH.md).
 Activity history and interaction behavior is in [docs/ACTIVITY_HISTORY.md](docs/ACTIVITY_HISTORY.md).
 Grounded assistant architecture is in [docs/GROUNDED_ASSISTANT.md](docs/GROUNDED_ASSISTANT.md).
+Persistent favorites and collections are documented in [docs/PERSISTENT_ORGANIZATION.md](docs/PERSISTENT_ORGANIZATION.md).
 
 ## Branches
 
@@ -41,6 +42,7 @@ Grounded assistant architecture is in [docs/GROUNDED_ASSISTANT.md](docs/GROUNDED
 | `feature/semantic-search` | Completed Phase 2C full-text, vector, and hybrid retrieval milestone |
 | `feature/activity-history` | Activity timeline and complete UI interaction pass |
 | `feature/grounded-assistant` | Private retrieval-augmented answers with verified citations |
+| `feature/persistent-organization` | Owner-scoped favorites, collections, and memory membership |
 
 For future work, create focused branches from `phase-2-production`, such as `feature/file-upload`, `feature/semantic-search`, or `fix/mobile-capture`.
 
@@ -109,6 +111,8 @@ Keep real credentials in `.env.local`. Never place a service-role key in fronten
 After applying the capture migration, deploy the processing worker using [docs/PHASE_2B_WORKER.md](docs/PHASE_2B_WORKER.md). Until its migration, secrets, and Edge Function are deployed, new files remain safely queued.
 
 Library rows open a complete memory detail view. Signed-in owners can retry processing, download private source files, or permanently delete a memory and its associated private file.
+
+Favorites and collections are stored in Supabase. Open any Library memory to add or remove it from a collection; deleting a collection keeps its memories.
 
 New files and links are protected against duplicate saves with owner-scoped fingerprints. Files are matched by content, while links are canonicalized before comparison.
 

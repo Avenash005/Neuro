@@ -13,6 +13,7 @@ const baseMemory = {
   summary: null,
   extracted_text: null,
   extracted_at: null,
+  is_favorite: false,
 };
 
 describe("normalizeMemory", () => {

@@ -17,6 +17,7 @@ function memory(id: string, createdAt: string): MemoryRecord {
     summary: null,
     extracted_text: null,
     extracted_at: null,
+    is_favorite: false,
   };
 }
 

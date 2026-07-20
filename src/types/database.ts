@@ -26,6 +26,7 @@ export type Database = {
           embedding_model: string | null;
           embedded_at: string | null;
           search_document: string | null;
+          is_favorite: boolean;
           content_fingerprint: string | null;
           created_at: string;
           updated_at: string;
@@ -51,6 +52,7 @@ export type Database = {
           embedding?: string | null;
           embedding_model?: string | null;
           embedded_at?: string | null;
+          is_favorite?: boolean;
           content_fingerprint?: string | null;
           created_at?: string;
           updated_at?: string;
@@ -76,6 +78,7 @@ export type Database = {
           embedding?: string | null;
           embedding_model?: string | null;
           embedded_at?: string | null;
+          is_favorite?: boolean;
           content_fingerprint?: string | null;
           created_at?: string;
           updated_at?: string;
@@ -117,6 +120,18 @@ export type Database = {
           locked_at?: string | null;
           updated_at?: string;
         };
+        Relationships: [];
+      };
+      collections: {
+        Row: { id: string; user_id: string; name: string; description: string; color: string; created_at: string; updated_at: string };
+        Insert: { id?: string; user_id?: string; name: string; description?: string; color?: string; created_at?: string; updated_at?: string };
+        Update: { name?: string; description?: string; color?: string; updated_at?: string };
+        Relationships: [];
+      };
+      collection_memories: {
+        Row: { collection_id: string; memory_id: string; user_id: string; created_at: string };
+        Insert: { collection_id: string; memory_id: string; user_id?: string; created_at?: string };
+        Update: Record<string, never>;
         Relationships: [];
       };
       profiles: {

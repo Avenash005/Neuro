@@ -25,6 +25,17 @@ export type MemoryRecord = MemoryInput & {
   summary: string | null;
   extracted_text: string | null;
   extracted_at: string | null;
+  is_favorite: boolean;
+};
+
+export type CollectionRecord = {
+  id: string;
+  name: string;
+  description: string;
+  color: string;
+  created_at: string;
+  updated_at: string;
+  memory_ids: string[];
 };
 
 export type MemorySearchResult = MemoryRecord & {
@@ -177,7 +188,7 @@ export async function createMemory(input: MemoryInput) {
       source_url: sourceUrl,
       content_fingerprint: contentFingerprint,
     })
-    .select("id, title, content, kind, source_url, processing_status, created_at, storage_path, original_filename, mime_type, file_size, summary, extracted_text, extracted_at")
+    .select("id, title, content, kind, source_url, processing_status, created_at, storage_path, original_filename, mime_type, file_size, summary, extracted_text, extracted_at, is_favorite")
     .single();
 
   if (error?.code === "23505" && contentFingerprint) throw duplicateRaceError("link");
@@ -190,12 +201,73 @@ export async function listMemories(): Promise<MemoryRecord[]> {
   await ensureUser();
   const { data, error } = await supabase
     .from("memories")
-    .select("id, title, content, kind, source_url, processing_status, created_at, storage_path, original_filename, mime_type, file_size, summary, extracted_text, extracted_at")
+    .select("id, title, content, kind, source_url, processing_status, created_at, storage_path, original_filename, mime_type, file_size, summary, extracted_text, extracted_at, is_favorite")
     .order("created_at", { ascending: false })
     .limit(50);
 
   if (error) throw error;
   return data.map(normalizeMemory);
+}
+
+export async function listCollections(): Promise<CollectionRecord[]> {
+  if (!supabase) return [];
+  await ensureUser();
+  const [{ data: collectionRows, error: collectionError }, { data: membershipRows, error: membershipError }] = await Promise.all([
+    supabase.from("collections").select("id, name, description, color, created_at, updated_at").order("updated_at", { ascending: false }),
+    supabase.from("collection_memories").select("collection_id, memory_id"),
+  ]);
+  if (collectionError) throw collectionError;
+  if (membershipError) throw membershipError;
+  return collectionRows.map((collection) => ({
+    ...collection,
+    memory_ids: membershipRows.filter((membership) => membership.collection_id === collection.id).map((membership) => membership.memory_id),
+  }));
+}
+
+export async function createCollection(name: string, description = "", color = "#6657d9"): Promise<CollectionRecord> {
+  if (!supabase) throw new Error("Supabase is not configured.");
+  const user = await ensureUser();
+  const { data, error } = await supabase.from("collections").insert({
+    user_id: user.id,
+    name: name.trim(),
+    description: description.trim(),
+    color,
+  }).select("id, name, description, color, created_at, updated_at").single();
+  if (error?.code === "23505") throw new Error("You already have a collection with this name.");
+  if (error) throw error;
+  return { ...data, memory_ids: [] };
+}
+
+export async function deleteCollection(collectionId: string) {
+  if (!supabase) throw new Error("Supabase is not configured.");
+  await ensureUser();
+  const { error } = await supabase.from("collections").delete().eq("id", collectionId);
+  if (error) throw error;
+}
+
+export async function addMemoryToCollection(collectionId: string, memoryId: string) {
+  if (!supabase) throw new Error("Supabase is not configured.");
+  const user = await ensureUser();
+  const { error } = await supabase.from("collection_memories").upsert({
+    collection_id: collectionId,
+    memory_id: memoryId,
+    user_id: user.id,
+  }, { onConflict: "collection_id,memory_id" });
+  if (error) throw error;
+}
+
+export async function removeMemoryFromCollection(collectionId: string, memoryId: string) {
+  if (!supabase) throw new Error("Supabase is not configured.");
+  await ensureUser();
+  const { error } = await supabase.from("collection_memories").delete().eq("collection_id", collectionId).eq("memory_id", memoryId);
+  if (error) throw error;
+}
+
+export async function setMemoryFavorite(memoryId: string, isFavorite: boolean) {
+  if (!supabase) throw new Error("Supabase is not configured.");
+  await ensureUser();
+  const { error } = await supabase.from("memories").update({ is_favorite: isFavorite }).eq("id", memoryId);
+  if (error) throw error;
 }
 
 type SearchResponseRow = {
@@ -301,7 +373,7 @@ export async function createFileMemory(file: File, title: string, uploadOptions:
         file_size: file.size,
         content_fingerprint: contentFingerprint,
       })
-      .select("id, title, content, kind, source_url, processing_status, created_at, storage_path, original_filename, mime_type, file_size, summary, extracted_text, extracted_at")
+      .select("id, title, content, kind, source_url, processing_status, created_at, storage_path, original_filename, mime_type, file_size, summary, extracted_text, extracted_at, is_favorite")
       .single();
 
     if (error?.code === "23505") throw duplicateRaceError("file");
@@ -371,6 +443,7 @@ export async function deleteMemory(memoryId: string, storagePath: string | null)
 
 type MemoryRow = Pick<Database["public"]["Tables"]["memories"]["Row"], "id" | "title" | "content" | "kind" | "processing_status" | "created_at" | "storage_path" | "original_filename" | "mime_type" | "file_size" | "summary" | "extracted_text" | "extracted_at"> & {
   source_url?: string | null;
+  is_favorite?: boolean;
 };
 
 export function normalizeMemory(memory: MemoryRow): MemoryRecord {
@@ -396,5 +469,6 @@ export function normalizeMemory(memory: MemoryRow): MemoryRecord {
     summary: memory.summary,
     extracted_text: memory.extracted_text,
     extracted_at: memory.extracted_at,
+    is_favorite: memory.is_favorite ?? false,
   };
 }
