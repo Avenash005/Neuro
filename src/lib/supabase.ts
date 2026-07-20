@@ -32,6 +32,17 @@ export type MemorySearchResult = MemoryRecord & {
   match: "hybrid" | "meaning" | "keyword";
 };
 
+export type AssistantCitation = {
+  number: number;
+  memory: MemoryRecord;
+};
+
+export type AssistantAnswer = {
+  answer: string;
+  citations: AssistantCitation[];
+  model: string | null;
+};
+
 export class DuplicateMemoryError extends Error {
   readonly existingMemoryId?: string;
 
@@ -225,6 +236,25 @@ export async function searchMemories(query: string, limit = 12): Promise<MemoryS
     score: Number(row.search_score) || 0,
     match: row.keyword_rank && row.semantic_rank ? "hybrid" : row.semantic_rank ? "meaning" : "keyword",
   }));
+}
+
+export async function askNeuron(question: string): Promise<AssistantAnswer> {
+  if (!supabase) throw new Error("Supabase is not configured.");
+  await ensureUser();
+  const { data, error } = await supabase.functions.invoke("ask-neuron", {
+    body: { question },
+  });
+  if (error) throw new Error(error.message);
+  if (data?.error) throw new Error(data.error);
+  const citationRows = Array.isArray(data?.citations) ? data.citations as Array<{ number?: unknown; memory?: SearchResponseRow }> : [];
+  const citations = citationRows
+    .filter((citation): citation is { number: number; memory: SearchResponseRow } => Number.isInteger(citation.number) && Boolean(citation.memory?.id && citation.memory.title))
+    .map((citation) => ({ number: citation.number, memory: normalizeMemory(citation.memory) }));
+  return {
+    answer: typeof data?.answer === "string" ? data.answer : "Neuron returned an empty answer.",
+    citations,
+    model: typeof data?.model === "string" ? data.model : null,
+  };
 }
 
 export async function createFileMemory(file: File, title: string, uploadOptions: SignedUploadOptions = {}) {

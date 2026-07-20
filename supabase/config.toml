@@ -8,3 +8,7 @@ verify_jwt = false
 [functions.search-memories]
 # The function validates the bearer token before calling its service-only search RPC.
 verify_jwt = false
+
+[functions.ask-neuron]
+# The function validates the bearer token before private retrieval and generation.
+verify_jwt = false
