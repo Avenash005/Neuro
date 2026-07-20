@@ -27,6 +27,7 @@ import {
   processMemoryNow,
   retryMemoryProcessing,
   removeMemoryFromCollection,
+  requestMemoryReanalysis,
   setMemoryFavorite,
   DuplicateMemoryError,
   type MemoryInput,
@@ -64,7 +65,7 @@ export default function App() {
     if (activeView === "Library") return <LibraryView onSearch={search} openCapture={openCapture} memories={syncedMemories} collections={syncedCollections} onRetry={retryProcessing} onDownload={downloadFile} onDelete={removeMemory} onToggleFavorite={toggleFavorite} onToggleCollection={toggleCollectionMembership} openMemoryId={openMemoryId} onOpenedMemory={() => setOpenMemoryId(null)} />;
     if (activeView === "Activity") return <ActivityView memories={syncedMemories} onOpenMemory={openSearchResult} openCapture={openCapture} />;
     if (activeView === "Collections") return <CollectionsView collections={syncedCollections} memories={syncedMemories} onCreate={createWorkspaceCollection} onDelete={removeWorkspaceCollection} onOpenMemory={openSearchResult} onRemoveMemory={removeCollectionMembership} />;
-    if (activeView === "Graph") return <KnowledgeGraphView memories={syncedMemories} entityData={knowledgeEntities} onOpenMemory={openSearchResult} openAssistant={() => setAssistantOpen(true)} />;
+    if (activeView === "Graph") return <KnowledgeGraphView memories={syncedMemories} entityData={knowledgeEntities} onOpenMemory={openSearchResult} onReanalyze={reanalyzeMemories} openAssistant={() => setAssistantOpen(true)} />;
     return <Dashboard onSearch={search} openCapture={openCapture} openAssistant={() => setAssistantOpen(true)} openActivity={() => setActiveView("Activity")} openLibrary={() => setActiveView("Library")} memories={syncedMemories} onOpenMemory={openSearchResult} onToggleFavorite={toggleFavorite} />;
   }, [activeView, syncedMemories, syncedCollections, knowledgeEntities, openMemoryId]);
 
@@ -245,6 +246,32 @@ export default function App() {
     } catch (error) {
       showToast(error instanceof Error ? error.message : "Could not remove this memory");
     }
+  }
+
+  async function reanalyzeMemories(memoryIds: string[], onProgress?: (completed: number, total: number) => void) {
+    const queuedIds = await requestMemoryReanalysis(memoryIds);
+    if (!queuedIds.length) throw new Error("These memories are already analyzed or currently processing.");
+    setSyncedMemories((current) => current.map((memory) => queuedIds.includes(memory.id) ? { ...memory, processing_status: "pending" } : memory));
+    let completed = 0;
+    let processed = 0;
+    let firstError: unknown = null;
+    onProgress?.(0, queuedIds.length);
+    for (const memoryId of queuedIds) {
+      try {
+        const result = await processMemoryNow(memoryId);
+        if (result?.status === "completed") completed += 1;
+      } catch (error) {
+        firstError ??= error;
+      }
+      processed += 1;
+      onProgress?.(processed, queuedIds.length);
+    }
+    const [memories, entities] = await Promise.all([listMemories(), listKnowledgeEntityData()]);
+    setSyncedMemories(memories);
+    setKnowledgeEntities(entities);
+    if (completed) showToast(`Graph analysis complete for ${completed} ${completed === 1 ? "memory" : "memories"}`);
+    if (!completed && firstError) throw firstError;
+    return completed;
   }
 
   function openSearchResult(memory: MemoryRecord) {

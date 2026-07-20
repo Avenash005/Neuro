@@ -72,6 +72,13 @@ function pointOnEllipse(index: number, total: number, radiusX: number, radiusY: 
   return { x: 500 + Math.cos(angle) * radiusX, y: 310 + Math.sin(angle) * radiusY };
 }
 
+export function graphBackfillCandidates(memories: MemoryRecord[], limit = 3) {
+  return memories
+    .filter((memory) => memory.processing_status === "ready" && !memory.graph_analyzed_at)
+    .sort((left, right) => left.created_at.localeCompare(right.created_at))
+    .slice(0, Math.max(0, Math.min(limit, 3)));
+}
+
 export function buildKnowledgeGraph(memories: MemoryRecord[], options: BuildGraphOptions = {}): KnowledgeGraphData {
   const maxMemories = options.maxMemories ?? 18;
   const maxEntities = options.maxEntities ?? 12;

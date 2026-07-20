@@ -22,6 +22,7 @@ The pure graph builder lives in `src/features/graph/graphData.ts`. It is determi
 - Select a node to highlight only its direct connections.
 - Select an entity to see and open its connected source memories.
 - Select a labeled relationship to inspect its evidence and confidence, then open the source memory.
+- Analyze one selected legacy memory or an oldest-first batch of up to three from the Graph page.
 - Select a memory to review its summary and tags, then open its complete Library detail.
 
 ## Privacy

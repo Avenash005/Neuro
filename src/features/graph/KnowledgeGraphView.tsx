@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type KeyboardEvent } from "react";
-import { ExternalLink, FileText, Network, RotateCcw, Search, Sparkles, Tag, ZoomIn, ZoomOut } from "lucide-react";
+import { ExternalLink, FileText, LoaderCircle, Network, RotateCcw, Search, Sparkles, Tag, ZoomIn, ZoomOut } from "lucide-react";
 import type { KnowledgeEntityData, MemoryKind, MemoryRecord } from "../../lib/supabase";
-import { buildKnowledgeGraph, type KnowledgeGraphNode } from "./graphData";
+import { buildKnowledgeGraph, graphBackfillCandidates, type KnowledgeGraphNode } from "./graphData";
 
 type GraphFilter = "all" | Lowercase<MemoryKind>;
 
@@ -9,6 +9,7 @@ type KnowledgeGraphViewProps = {
   memories: MemoryRecord[];
   entityData: KnowledgeEntityData;
   onOpenMemory: (memory: MemoryRecord) => void;
+  onReanalyze: (memoryIds: string[], onProgress?: (completed: number, total: number) => void) => Promise<number>;
   openAssistant: () => void;
 };
 
@@ -24,12 +25,14 @@ function shortLabel(label: string, length = 19) {
   return label.length > length ? `${label.slice(0, length - 1)}…` : label;
 }
 
-export function KnowledgeGraphView({ memories, entityData, onOpenMemory, openAssistant }: KnowledgeGraphViewProps) {
+export function KnowledgeGraphView({ memories, entityData, onOpenMemory, onReanalyze, openAssistant }: KnowledgeGraphViewProps) {
   const [filter, setFilter] = useState<GraphFilter>("all");
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
   const [zoom, setZoom] = useState(1);
+  const [analysisProgress, setAnalysisProgress] = useState<{ completed: number; total: number } | null>(null);
+  const [analysisError, setAnalysisError] = useState<string | null>(null);
   const filteredMemories = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
     return memories.filter((memory) => {
@@ -39,6 +42,8 @@ export function KnowledgeGraphView({ memories, entityData, onOpenMemory, openAss
     });
   }, [filter, memories, query]);
   const graph = useMemo(() => buildKnowledgeGraph(filteredMemories, { entityData }), [entityData, filteredMemories]);
+  const eligibleMemories = filteredMemories.filter((memory) => memory.processing_status === "ready" && !memory.graph_analyzed_at);
+  const nextBackfillBatch = graphBackfillCandidates(filteredMemories);
   const nodeById = useMemo(() => new Map(graph.nodes.map((node) => [node.id, node])), [graph.nodes]);
   const selectedNode = selectedId ? nodeById.get(selectedId) || null : null;
   const selectedEdge = selectedEdgeId ? graph.edges.find((edge) => edge.id === selectedEdgeId) || null : null;
@@ -66,6 +71,18 @@ export function KnowledgeGraphView({ memories, entityData, onOpenMemory, openAss
   }, [graph.edges, nodeById, selectedEdgeId, selectedId]);
 
   const chooseNode = (node: KnowledgeGraphNode) => { setSelectedEdgeId(null); setSelectedId((current) => current === node.id ? null : node.id); };
+  const runAnalysis = async (memoryIds: string[]) => {
+    if (analysisProgress || !memoryIds.length) return;
+    setAnalysisError(null);
+    setAnalysisProgress({ completed: 0, total: Math.min(memoryIds.length, 3) });
+    try {
+      await onReanalyze(memoryIds.slice(0, 3), (completed, total) => setAnalysisProgress({ completed, total }));
+    } catch (error) {
+      setAnalysisError(error instanceof Error ? error.message : "Could not analyze these memories.");
+    } finally {
+      setAnalysisProgress(null);
+    }
+  };
 
   return (
     <main className="page-content graph-page real-graph-page">
@@ -81,6 +98,8 @@ export function KnowledgeGraphView({ memories, entityData, onOpenMemory, openAss
       </section>
 
       <section className="graph-stage">
+        {eligibleMemories.length > 0 && <div className="graph-backfill"><div><Sparkles size={17} /><span><strong>{eligibleMemories.length} existing {eligibleMemories.length === 1 ? "memory is" : "memories are"} ready for entity analysis</strong><small>Runs only when you choose. Up to 3 memories per batch.</small></span></div><button disabled={Boolean(analysisProgress)} onClick={() => void runAnalysis(nextBackfillBatch.map((memory) => memory.id))}>{analysisProgress ? <><LoaderCircle size={14} /> Analyzing {Math.min(analysisProgress.completed + 1, analysisProgress.total)} of {analysisProgress.total}</> : <><Sparkles size={14} /> Analyze {nextBackfillBatch.length}</>}</button></div>}
+        {analysisError && <div className="graph-analysis-error">{analysisError}</div>}
         <div className="graph-summary"><span><Network size={15} /> {graph.memoryCount} memories</span><span><Tag size={14} /> {graph.entityCount} {graph.source === "entities" ? "entities" : "topics"}</span><span>{graph.relationshipCount} relationships</span><span>{graph.source === "entities" ? "Typed extraction" : "Tag fallback"}</span></div>
         {!graph.nodes.length ? <div className="graph-empty"><Network size={38} /><h2>{memories.length ? "No memories match these filters" : "Your graph is ready to grow"}</h2><p>{memories.length ? "Clear the search or choose another memory type." : "Capture your first memory and Neuron will map its topics here."}</p>{(query || filter !== "all") && <button onClick={() => { setQuery(""); setFilter("all"); }}>Clear filters</button>}</div>
         : <div className="graph-canvas real-graph-canvas">
@@ -105,7 +124,7 @@ export function KnowledgeGraphView({ memories, entityData, onOpenMemory, openAss
             })}</g>
           </svg>
           <div className="graph-legend"><span><i className="memory" />Memories</span><span><i className="entity" />Entities</span><span><i className="relationship" />Relationships</span><span><i className="root" />Your brain</span></div>
-          {(selectedNode || selectedEdge) && <aside className="graph-inspector"><button className="graph-inspector-close" onClick={() => { setSelectedId(null); setSelectedEdgeId(null); }} aria-label="Close graph details">×</button>{selectedEdge ? <><span>source-linked relationship</span><h2>{nodeById.get(selectedEdge.source)?.label} → {nodeById.get(selectedEdge.target)?.label}</h2><p><strong>{selectedEdge.label?.replace(/_/g, " ")}</strong>{selectedEdge.evidence ? ` — “${selectedEdge.evidence}”` : ""}</p>{typeof selectedEdge.confidence === "number" && <div className="graph-confidence">Confidence {Math.round(selectedEdge.confidence * 100)}%</div>}{relationshipMemory && <button className="graph-open-memory" onClick={() => onOpenMemory(relationshipMemory)}><FileText size={15} /> Open source memory <ExternalLink size={13} /></button>}</> : selectedNode && <><span>{selectedNode.entityType || selectedNode.type}</span><h2>{selectedNode.label}</h2>{selectedMemory ? <><p>{selectedMemory.summary || selectedMemory.content || `${selectedMemory.kind} saved in Neuron.`}</p><div className="graph-inspector-tags">{selectedMemory.tags.slice(0, 5).map((tag) => <small key={tag}>{tag}</small>)}</div><button className="graph-open-memory" onClick={() => onOpenMemory(selectedMemory)}><FileText size={15} /> Open memory <ExternalLink size={13} /></button></> : selectedNode.type === "entity" ? <><p>Connected to {connectedMemories.length} source {connectedMemories.length === 1 ? "memory" : "memories"} in this view.</p><div className="graph-topic-memories">{connectedMemories.slice(0, 5).map((memory) => <button key={memory.id} onClick={() => onOpenMemory(memory)}>{memory.title}</button>)}</div></> : <p>Your private workspace hub connects the visible entity and memory clusters.</p>}</>}</aside>}
+          {(selectedNode || selectedEdge) && <aside className="graph-inspector"><button className="graph-inspector-close" onClick={() => { setSelectedId(null); setSelectedEdgeId(null); }} aria-label="Close graph details">×</button>{selectedEdge ? <><span>source-linked relationship</span><h2>{nodeById.get(selectedEdge.source)?.label} → {nodeById.get(selectedEdge.target)?.label}</h2><p><strong>{selectedEdge.label?.replace(/_/g, " ")}</strong>{selectedEdge.evidence ? ` — “${selectedEdge.evidence}”` : ""}</p>{typeof selectedEdge.confidence === "number" && <div className="graph-confidence">Confidence {Math.round(selectedEdge.confidence * 100)}%</div>}{relationshipMemory && <button className="graph-open-memory" onClick={() => onOpenMemory(relationshipMemory)}><FileText size={15} /> Open source memory <ExternalLink size={13} /></button>}</> : selectedNode && <><span>{selectedNode.entityType || selectedNode.type}</span><h2>{selectedNode.label}</h2>{selectedMemory ? <><p>{selectedMemory.summary || selectedMemory.content || `${selectedMemory.kind} saved in Neuron.`}</p><div className="graph-inspector-tags">{selectedMemory.tags.slice(0, 5).map((tag) => <small key={tag}>{tag}</small>)}</div>{!selectedMemory.graph_analyzed_at && selectedMemory.processing_status === "ready" && <button className="graph-analyze-one" disabled={Boolean(analysisProgress)} onClick={() => void runAnalysis([selectedMemory.id])}><Sparkles size={14} /> Analyze entities</button>}<button className="graph-open-memory" onClick={() => onOpenMemory(selectedMemory)}><FileText size={15} /> Open memory <ExternalLink size={13} /></button></> : selectedNode.type === "entity" ? <><p>Connected to {connectedMemories.length} source {connectedMemories.length === 1 ? "memory" : "memories"} in this view.</p><div className="graph-topic-memories">{connectedMemories.slice(0, 5).map((memory) => <button key={memory.id} onClick={() => onOpenMemory(memory)}>{memory.title}</button>)}</div></> : <p>Your private workspace hub connects the visible entity and memory clusters.</p>}</>}</aside>}
         </div>}
       </section>
     </main>

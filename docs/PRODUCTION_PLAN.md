@@ -164,6 +164,7 @@ Goal: turn stored information into useful action.
 - [x] Derive people, organizations, technologies, dates, URLs, places, concepts, and source-backed relationships
 - [x] Build an interactive graph from private memories and AI tags
 - [x] Add owner-scoped entity storage and read API for relationship extraction
+- [x] Add explicit cost-capped backfill for legacy memory entities
 - [ ] Generate flashcards and quizzes
 - [ ] Implement spaced-repetition scheduling
 - [ ] Extract tasks and reminders with user confirmation

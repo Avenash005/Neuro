@@ -19,6 +19,7 @@ function memory(id: string, createdAt: string): MemoryRecord {
     extracted_at: null,
     is_favorite: false,
     tags: [],
+    graph_analyzed_at: null,
   };
 }
 

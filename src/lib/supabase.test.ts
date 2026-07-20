@@ -15,6 +15,7 @@ const baseMemory = {
   extracted_at: null,
   is_favorite: false,
   tags: [],
+  graph_analyzed_at: null,
 };
 
 describe("normalizeMemory", () => {
