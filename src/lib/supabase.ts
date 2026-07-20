@@ -119,6 +119,23 @@ export type AssistantAnswer = {
   model: string | null;
 };
 
+export type LiveAssistMode = "conversation" | "meeting";
+
+export type LiveAssistItem = {
+  text: string;
+  citations: number[];
+};
+
+export type LiveAssistBriefing = {
+  brief: string;
+  briefCitations: number[];
+  talkingPoints: LiveAssistItem[];
+  commitments: LiveAssistItem[];
+  questions: LiveAssistItem[];
+  citations: Array<{ number: number; memoryId: string; title: string }>;
+  model: string | null;
+};
+
 export class DuplicateMemoryError extends Error {
   readonly existingMemoryId?: string;
 
@@ -442,6 +459,30 @@ export async function askNeuron(question: string): Promise<AssistantAnswer> {
   return {
     answer: typeof data?.answer === "string" ? data.answer : "Neuron returned an empty answer.",
     citations,
+    model: typeof data?.model === "string" ? data.model : null,
+  };
+}
+
+export async function runLiveAssist(input: { mode: LiveAssistMode; goal: string; contextLabel: string; memoryIds: string[] }): Promise<LiveAssistBriefing> {
+  if (!supabase) throw new Error("Supabase is not configured.");
+  await ensureUser();
+  const { data, error } = await supabase.functions.invoke("live-assist", { body: input });
+  if (error) throw new Error(error.message);
+  if (data?.error) throw new Error(data.error);
+  const readItems = (value: unknown): LiveAssistItem[] => Array.isArray(value) ? value.flatMap((candidate) => {
+    if (!candidate || typeof candidate !== "object") return [];
+    const item = candidate as { text?: unknown; citations?: unknown };
+    if (typeof item.text !== "string") return [];
+    return [{ text: item.text, citations: Array.isArray(item.citations) ? item.citations.filter((citation): citation is number => Number.isInteger(citation)) : [] }];
+  }) : [];
+  const citationRows = Array.isArray(data?.citations) ? data.citations as Array<{ number?: unknown; memory?: { id?: unknown; title?: unknown } }> : [];
+  return {
+    brief: typeof data?.brief === "string" ? data.brief : "Neuron Sidekick returned an empty briefing.",
+    briefCitations: Array.isArray(data?.briefCitations) ? data.briefCitations.filter((citation: unknown): citation is number => Number.isInteger(citation)) : [],
+    talkingPoints: readItems(data?.talkingPoints),
+    commitments: readItems(data?.commitments),
+    questions: readItems(data?.questions),
+    citations: citationRows.flatMap((citation) => Number.isInteger(citation.number) && typeof citation.memory?.id === "string" && typeof citation.memory.title === "string" ? [{ number: citation.number as number, memoryId: citation.memory.id, title: citation.memory.title }] : []),
     model: typeof data?.model === "string" ? data.model : null,
   };
 }
