@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { LiveAssistBriefing } from "../../lib/supabase";
-import { formatLiveAssistBriefing, toggleMemorySelection } from "./liveAssist";
+import { buildSidekickSessionTitle, formatLiveAssistBriefing, toggleMemorySelection } from "./liveAssist";
 
 describe("Live Assist helpers", () => {
   it("toggles scoped memories without exceeding the limit", () => {
@@ -14,5 +14,10 @@ describe("Live Assist helpers", () => {
     const text = formatLiveAssistBriefing(briefing);
     expect(text).toContain("Authentication is complete. [1]");
     expect(text).toContain("[1] Project update");
+  });
+
+  it("builds a short reusable session title", () => {
+    expect(buildSidekickSessionTitle("meeting", " Weekly sync ", "Help me prep")).toBe("Weekly sync");
+    expect(buildSidekickSessionTitle("conversation", "", "Reply to Maya about the launch plan today")).toContain("Conversation: Reply to Maya");
   });
 });
