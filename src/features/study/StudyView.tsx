@@ -34,12 +34,19 @@ export function StudyView({ cards, memories, onOpenMemory, onAnalyzeMemories }: 
   return (
     <main className="page-content study-page">
       <section className="page-intro study-intro">
-        <div><span>Learn from your brain</span><h1>Study</h1><p>Review source-backed flashcards or test yourself with quick quizzes.</p></div>
+        <div>
+          <span className="eyebrow"><span />Learn from your brain</span>
+          <h1>Study</h1>
+          <p>Review source-backed flashcards or test yourself with quick quizzes.</p>
+        </div>
         <div className="study-total"><GraduationCap size={18} /><strong>{cards.length}</strong><span>cards</span></div>
       </section>
 
       <section className="study-controls">
-        <div className="study-mode" aria-label="Study mode"><button className={mode === "cards" ? "active" : ""} onClick={() => setMode("cards")}><BookOpen size={15} /> Flashcards</button><button className={mode === "quiz" ? "active" : ""} onClick={() => setMode("quiz")}><CircleHelp size={15} /> Quiz</button></div>
+        <div className="segmented-control" aria-label="Study mode">
+          <button className={mode === "cards" ? "active" : ""} onClick={() => setMode("cards")}><BookOpen size={15} /> Flashcards</button>
+          <button className={mode === "quiz" ? "active" : ""} onClick={() => setMode("quiz")}><CircleHelp size={15} /> Quiz</button>
+        </div>
         <label className="study-search"><Search size={15} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search cards..." /></label>
         <label className="study-source"><span>Source</span><select value={source} onChange={(event) => setSource(event.target.value)}><option value="all">All memories</option>{sources.map((memory) => <option key={memory.id} value={memory.id}>{memory.title}</option>)}</select></label>
       </section>
@@ -93,5 +100,17 @@ function Quiz({ cards, memories, onOpenMemory }: { cards: StudyCardRecord[]; mem
 }
 
 function StudyEmpty({ hasCards, canAnalyze = false, analyzing = false, onAnalyze, quizUnavailable = false }: { hasCards: boolean; canAnalyze?: boolean; analyzing?: boolean; onAnalyze: () => void; quizUnavailable?: boolean }) {
-  return <section className="study-empty"><span><GraduationCap size={32} /></span><h2>{quizUnavailable ? "Quiz options are not ready" : hasCards ? "No cards match this filter" : "Build your first study deck"}</h2><p>{quizUnavailable ? "These cards can be reviewed as flashcards, but need incorrect answer options before they can become a quiz." : hasCards ? "Try another source or clear the search." : canAnalyze ? "New memories generate cards automatically. Analyze existing memories to create source-backed questions without guessing." : "Capture a new memory with useful learning material and Neuron will create source-backed cards while it processes."}</p>{!hasCards && canAnalyze && <button className="primary-action" disabled={analyzing} onClick={onAnalyze}>{analyzing ? <LoaderCircle size={15} /> : <Sparkles size={15} />} {analyzing ? "Analyzing" : "Analyze memories"}</button>}</section>;
+  return (
+    <div className="empty-state py-12">
+      <div className="empty-state-icon mb-3"><GraduationCap size={32} /></div>
+      <h3>{quizUnavailable ? "Quiz options are not ready" : hasCards ? "No cards match this filter" : "Build your first study deck"}</h3>
+      <p>{quizUnavailable ? "These cards can be reviewed as flashcards, but need incorrect answer options before they can become a quiz." : hasCards ? "Try another source or clear the search." : canAnalyze ? "New memories generate cards automatically. Analyze existing memories to create source-backed questions without guessing." : "Capture a new memory with useful learning material and Neuron will create source-backed cards while it processes."}</p>
+      {!hasCards && canAnalyze && (
+        <button className="primary-action mt-4" disabled={analyzing} onClick={onAnalyze}>
+          {analyzing ? <LoaderCircle size={15} className="animate-spin" /> : <Sparkles size={15} />}
+          <span>{analyzing ? "Analyzing..." : "Analyze memories"}</span>
+        </button>
+      )}
+    </div>
+  );
 }

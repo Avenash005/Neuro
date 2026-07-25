@@ -1,7 +1,7 @@
 import { AnimatePresence, motion } from "framer-motion";
-import { Check } from "lucide-react";
+import { Check, Home, Search, Sparkles, Plus, User as UserIcon } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { User } from "@supabase/supabase-js";
+import type { User as SupabaseUser } from "@supabase/supabase-js";
 import { Header, Sidebar } from "./components/layout/AppLayout";
 import { AssistantPanel, CaptureModal, SearchModal } from "./components/overlays/AppOverlays";
 import { AuthModal } from "./features/auth/AuthModal";
@@ -13,6 +13,7 @@ import { RecapsView } from "./features/recaps/RecapsView";
 import { StudyView } from "./features/study/StudyView";
 import { SidekickView } from "./features/sidekick/SidekickView";
 import { CollectionsView, LibraryView } from "./features/views/FeatureViews";
+import { SettingsView } from "./features/settings/SettingsView";
 import {
   addMemoryToCollection,
   connectSupabase,
@@ -55,12 +56,13 @@ const DEFAULT_SEARCH = "What did I save about React before demo day?";
 export default function App() {
   const [activeView, setActiveView] = useState<View>("Home");
   const [captureOpen, setCaptureOpen] = useState(false);
+  const [captureDefaultMode, setCaptureDefaultMode] = useState<"Note" | "Upload" | "Link" | "Voice">("Note");
   const [searchQuery, setSearchQuery] = useState<string | null>(null);
   const [assistantOpen, setAssistantOpen] = useState(false);
   const [mobileNav, setMobileNav] = useState(false);
   const [authOpen, setAuthOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
-  const [authUser, setAuthUser] = useState<User | null>(null);
+  const [authUser, setAuthUser] = useState<SupabaseUser | null>(null);
   const [backendStatus, setBackendStatus] = useState<BackendStatus>(isSupabaseConfigured ? "connecting" : "local");
   const [syncedMemories, setSyncedMemories] = useState<MemoryRecord[]>([]);
   const [syncedCollections, setSyncedCollections] = useState<CollectionRecord[]>([]);
@@ -68,11 +70,38 @@ export default function App() {
   const [actionItems, setActionItems] = useState<ActionItemRecord[]>([]);
   const [studyCards, setStudyCards] = useState<StudyCardRecord[]>([]);
   const [openMemoryId, setOpenMemoryId] = useState<string | null>(null);
+  const [collapsed, setCollapsed] = useState(false);
+  const [theme, setTheme] = useState<"light" | "dark">(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("theme");
+      if (saved === "light" || saved === "dark") return saved;
+      return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    }
+    return "light";
+  });
+
+  useEffect(() => {
+    const root = window.document.documentElement;
+    if (theme === "dark") {
+      root.classList.add("dark");
+    } else {
+      root.classList.remove("dark");
+    }
+    localStorage.setItem("theme", theme);
+  }, [theme]);
+
   const autoProcessingIds = useRef(new Set<string>());
   const activeUserId = useRef<string | null>(null);
 
   const search = (query: string) => setSearchQuery(query || DEFAULT_SEARCH);
-  const openCapture = () => setCaptureOpen(true);
+  const openCapture = () => {
+    setCaptureDefaultMode("Note");
+    setCaptureOpen(true);
+  };
+  const openCaptureWithMode = (mode: "Note" | "Upload" | "Link" | "Voice") => {
+    setCaptureDefaultMode(mode);
+    setCaptureOpen(true);
+  };
 
   const content = useMemo(() => {
     if (activeView === "Library") return <LibraryView onSearch={search} openCapture={openCapture} memories={syncedMemories} collections={syncedCollections} onRetry={retryProcessing} onDownload={downloadFile} onDelete={removeMemory} onToggleFavorite={toggleFavorite} onToggleCollection={toggleCollectionMembership} openMemoryId={openMemoryId} onOpenedMemory={() => setOpenMemoryId(null)} />;
@@ -83,8 +112,9 @@ export default function App() {
     if (activeView === "Recaps") return <RecapsView memories={syncedMemories} actionItems={actionItems} onOpenMemory={openSearchResult} openCapture={openCapture} openTasks={() => setActiveView("Tasks")} />;
     if (activeView === "Study") return <StudyView cards={studyCards} memories={syncedMemories} onOpenMemory={openSearchResult} onAnalyzeMemories={analyzeStudyMemories} />;
     if (activeView === "Sidekick") return <SidekickView memories={syncedMemories} collections={syncedCollections} onOpenMemory={openSearchResult} />;
-    return <Dashboard onSearch={search} openCapture={openCapture} openAssistant={() => setAssistantOpen(true)} openActivity={() => setActiveView("Activity")} openLibrary={() => setActiveView("Library")} openTasks={() => setActiveView("Tasks")} openRecaps={() => setActiveView("Recaps")} memories={syncedMemories} actionItems={actionItems} onOpenMemory={openSearchResult} onToggleFavorite={toggleFavorite} onCompleteTask={(id) => changeActionItemStatus(id, "completed")} />;
-  }, [activeView, syncedMemories, syncedCollections, knowledgeEntities, actionItems, studyCards, openMemoryId]);
+    if (activeView === "Settings") return <SettingsView user={authUser} memories={syncedMemories} />;
+    return <Dashboard onSearch={search} openCapture={openCapture} openCaptureWithMode={openCaptureWithMode} openAssistant={() => setAssistantOpen(true)} openActivity={() => setActiveView("Activity")} openLibrary={() => setActiveView("Library")} openTasks={() => setActiveView("Tasks")} openRecaps={() => setActiveView("Recaps")} memories={syncedMemories} actionItems={actionItems} onOpenMemory={openSearchResult} onToggleFavorite={toggleFavorite} onCompleteTask={(id) => changeActionItemStatus(id, "completed")} />;
+  }, [activeView, syncedMemories, syncedCollections, knowledgeEntities, actionItems, studyCards, openMemoryId, authUser]);
 
   useEffect(() => {
     if (!isSupabaseConfigured) return;
@@ -387,10 +417,32 @@ export default function App() {
     <div className="app-shell">
       <div className={mobileNav ? "mobile-sidebar open" : "mobile-sidebar"}>
         <div className="mobile-sidebar-backdrop" onClick={() => setMobileNav(false)} />
-        <Sidebar activeView={activeView} setActiveView={(view) => { setActiveView(view); setMobileNav(false); }} openCapture={() => { setCaptureOpen(true); setMobileNav(false); }} profileName={profileName} profileSubtitle={profileSubtitle} onProfileClick={() => { setAuthOpen(true); setMobileNav(false); }} onSearch={(query) => { search(query); setMobileNav(false); }} onSettingsClick={() => { setAuthOpen(true); setMobileNav(false); }} />
+        <Sidebar activeView={activeView} setActiveView={(view) => { setActiveView(view); setMobileNav(false); }} openCapture={() => { setCaptureOpen(true); setMobileNav(false); }} profileName={profileName} profileSubtitle={profileSubtitle} onProfileClick={() => { setActiveView("Settings"); setMobileNav(false); }} onSearch={(query) => { search(query); setMobileNav(false); }} onSettingsClick={() => { setActiveView("Settings"); setMobileNav(false); }} collapsed={collapsed} setCollapsed={setCollapsed} theme={theme} onToggleTheme={() => setTheme(theme === "light" ? "dark" : "light")} />
       </div>
-      <div className="desktop-sidebar"><Sidebar activeView={activeView} setActiveView={setActiveView} openCapture={openCapture} profileName={profileName} profileSubtitle={profileSubtitle} onProfileClick={() => setAuthOpen(true)} onSearch={search} onSettingsClick={() => setAuthOpen(true)} /></div>
-      <div className="workspace"><Header onSearch={search} openAssistant={() => setAssistantOpen(true)} openMobileNav={() => setMobileNav(true)} backendStatus={backendStatus} openActivity={() => setActiveView("Activity")} />{content}</div>
+      <div className="desktop-sidebar"><Sidebar activeView={activeView} setActiveView={setActiveView} openCapture={openCapture} profileName={profileName} profileSubtitle={profileSubtitle} onProfileClick={() => setActiveView("Settings")} onSearch={search} onSettingsClick={() => setActiveView("Settings")} collapsed={collapsed} setCollapsed={setCollapsed} theme={theme} onToggleTheme={() => setTheme(theme === "light" ? "dark" : "light")} /></div>
+      <div className={`workspace ${collapsed ? "workspace-collapsed" : ""}`}><Header onSearch={search} openAssistant={() => setAssistantOpen(true)} openMobileNav={() => setMobileNav(true)} backendStatus={backendStatus} openActivity={() => setActiveView("Activity")} openCapture={openCapture} onProfileClick={() => setActiveView("Settings")} />{content}</div>
+
+      <div className="mobile-bottom-nav">
+        <button className={activeView === "Home" ? "active" : ""} onClick={() => setActiveView("Home")}>
+          <Home size={20} />
+          <span>Home</span>
+        </button>
+        <button onClick={() => setSearchQuery("")}>
+          <Search size={20} />
+          <span>Search</span>
+        </button>
+        <button className="mobile-quick-add" onClick={openCapture} aria-label="Quick Add">
+          <Plus size={24} />
+        </button>
+        <button className={activeView === "Sidekick" ? "active" : ""} onClick={() => setActiveView("Sidekick")}>
+          <Sparkles size={20} />
+          <span>AI Chat</span>
+        </button>
+        <button className={activeView === "Settings" ? "active" : ""} onClick={() => setActiveView("Settings")}>
+          <UserIcon size={20} />
+          <span>Profile</span>
+        </button>
+      </div>
 
       <AnimatePresence>
         {authOpen && <motion.div className="modal-layer" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onMouseDown={(event) => { if (event.target === event.currentTarget) setAuthOpen(false); }}><AuthModal user={authUser} onClose={() => setAuthOpen(false)} /></motion.div>}
@@ -399,7 +451,7 @@ export default function App() {
       <AnimatePresence>
         {(captureOpen || searchQuery !== null) && (
           <motion.div className="modal-layer" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onMouseDown={(event) => { if (event.target === event.currentTarget) { setCaptureOpen(false); setSearchQuery(null); } }}>
-            {captureOpen ? <CaptureModal onClose={() => setCaptureOpen(false)} onSave={saveMemory} /> : <SearchModal query={searchQuery ?? ""} onClose={() => setSearchQuery(null)} onOpenMemory={openSearchResult} />}
+            {captureOpen ? <CaptureModal onClose={() => setCaptureOpen(false)} onSave={saveMemory} defaultMode={captureDefaultMode} /> : <SearchModal query={searchQuery ?? ""} onClose={() => setSearchQuery(null)} onOpenMemory={openSearchResult} />}
           </motion.div>
         )}
       </AnimatePresence>

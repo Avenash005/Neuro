@@ -34,11 +34,15 @@ export function ActivityView({ memories, onOpenMemory, openCapture }: ActivityVi
   return (
     <main className="page-content activity-page">
       <section className="page-intro activity-intro">
-        <div><span>Your progress</span><h1>Activity</h1><p>A clear record of what you captured, explored, and processed over time.</p></div>
+        <div>
+          <span className="eyebrow"><span />Your progress</span>
+          <h1>Activity</h1>
+          <p>A clear record of what you captured, explored, and processed over time.</p>
+        </div>
         <button className="primary-action" onClick={openCapture}><Plus size={17} /> Add today’s work</button>
       </section>
 
-      <div className="activity-range" aria-label="Activity date range">
+      <div className="segmented-control mt-1 mb-4" aria-label="Activity date range">
         {([{ label: "7 days", value: 7 }, { label: "30 days", value: 30 }, { label: "All time", value: "all" }] as const).map((option) => (
           <button key={option.label} className={range === option.value ? "active" : ""} onClick={() => setRange(option.value)}>{option.label}</button>
         ))}
@@ -86,7 +90,14 @@ export function ActivityView({ memories, onOpenMemory, openCapture }: ActivityVi
               })}
             </div>
           </section>
-        )) : <div className="activity-empty"><CalendarDays size={34} /><h3>No work in this range</h3><p>Capture a memory to begin building your history.</p><button className="primary-action" onClick={openCapture}><Plus size={16} /> Capture memory</button></div>}
+        )) : (
+          <div className="empty-state py-12">
+            <div className="empty-state-icon mb-3"><CalendarDays size={32} /></div>
+            <h3>No work in this range</h3>
+            <p>Capture a memory to begin building your history.</p>
+            <button className="primary-action mt-4" onClick={openCapture}><Plus size={16} /> Capture memory</button>
+          </div>
+        )}
       </section>
     </main>
   );

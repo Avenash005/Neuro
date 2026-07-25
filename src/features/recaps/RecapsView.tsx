@@ -19,12 +19,18 @@ export function RecapsView({ memories, actionItems, onOpenMemory, openCapture, o
   return (
     <main className="page-content recaps-page">
       <section className="page-intro recaps-intro">
-        <div><span>Your reflection</span><h1>Recaps</h1><p>See what you captured, finished, and returned to over time.</p></div>
+        <div>
+          <span className="eyebrow"><span />Your reflection</span>
+          <h1>Recaps</h1>
+          <p>See what you captured, finished, and returned to over time.</p>
+        </div>
         <button className="primary-action" onClick={openCapture}><Plus size={17} /> Capture today</button>
       </section>
 
-      <div className="activity-range" aria-label="Recap date range">
-        {([{ label: "Today", value: "today" }, { label: "7 days", value: "week" }, { label: "30 days", value: "month" }] as const).map((option) => <button key={option.value} className={range === option.value ? "active" : ""} onClick={() => setRange(option.value)}>{option.label}</button>)}
+      <div className="segmented-control mt-1 mb-4" aria-label="Recap date range">
+        {([{ label: "Today", value: "today" }, { label: "7 days", value: "week" }, { label: "30 days", value: "month" }] as const).map((option) => (
+          <button key={option.value} className={range === option.value ? "active" : ""} onClick={() => setRange(option.value)}>{option.label}</button>
+        ))}
       </div>
 
       <section className="recap-hero card">
@@ -59,7 +65,14 @@ export function RecapsView({ memories, actionItems, onOpenMemory, openCapture, o
             {day.memories.map((memory) => <motion.button whileHover={{ x: 3 }} key={memory.id} onClick={() => onOpenMemory(memory)}><span className="recap-event-icon memory"><BookOpen size={15} /></span><span><strong>{memory.title}</strong><small>{memory.summary || memory.content || `${memory.kind} memory`}</small></span><span>Captured</span><ArrowRight size={15} /></motion.button>)}
             {day.completed.map((item) => <div className="recap-completed" key={item.id}><span className="recap-event-icon completed"><CheckCircle2 size={15} /></span><span><strong>{item.title}</strong><small>Completed action</small></span><span>Done</span><CheckCircle2 size={15} /></div>)}
           </div>
-        </section>) : <div className="activity-empty"><Flame size={34} /><h3>No activity in this period</h3><p>Capture a thought or complete a task to begin your recap.</p><button className="primary-action" onClick={openCapture}><Plus size={16} /> Capture memory</button></div>}
+        </section>) : (
+          <div className="empty-state py-12">
+            <div className="empty-state-icon mb-3"><Flame size={32} /></div>
+            <h3>No activity in this period</h3>
+            <p>Capture a thought or complete a task to begin your recap.</p>
+            <button className="primary-action mt-4" onClick={openCapture}><Plus size={16} /> Capture memory</button>
+          </div>
+        )}
       </section>
     </main>
   );
@@ -70,5 +83,10 @@ function RecapStat({ icon: Icon, label, value, detail, color }: { icon: LucideIc
 }
 
 function RecapEmpty({ icon: Icon, text }: { icon: LucideIcon; text: string }) {
-  return <div className="recap-empty"><Icon size={22} /><span>{text}</span></div>;
+  return (
+    <div className="empty-state py-8">
+      <div className="empty-state-icon mb-2"><Icon size={20} className="text-slate-400" /></div>
+      <p className="text-xs text-slate-400 font-medium text-center">{text}</p>
+    </div>
+  );
 }
