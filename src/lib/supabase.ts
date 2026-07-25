@@ -1,5 +1,5 @@
 import { createClient, type Provider, type User } from "@supabase/supabase-js";
-import type { Database } from "../types/database";
+import type { Database, Json } from "../types/database";
 import { createFileFingerprint, createLinkFingerprint } from "./deduplication";
 import { runMemoryDeletion } from "./memoryDeletion";
 import { uploadToSignedUrlWithProgress, type SignedUploadOptions } from "./signedUpload";
@@ -136,6 +136,28 @@ export type LiveAssistBriefing = {
   model: string | null;
 };
 
+export type SidekickSessionRecord = {
+  id: string;
+  mode: LiveAssistMode;
+  title: string;
+  context_label: string;
+  goal: string;
+  selected_memory_ids: string[];
+  briefing: LiveAssistBriefing | null;
+  last_used_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type SidekickNoteRecord = {
+  id: string;
+  session_id: string;
+  memory_id: string | null;
+  body: string;
+  created_at: string;
+  updated_at: string;
+};
+
 export class DuplicateMemoryError extends Error {
   readonly existingMemoryId?: string;
 
@@ -148,6 +170,7 @@ export class DuplicateMemoryError extends Error {
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.trim();
 const supabasePublishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY?.trim();
+const configuredAuthRedirectUrl = import.meta.env.VITE_AUTH_REDIRECT_URL?.trim();
 
 export const isSupabaseConfigured = Boolean(supabaseUrl && supabasePublishableKey);
 
@@ -185,11 +208,16 @@ export function onAuthChange(callback: (user: User | null) => void) {
   return () => data.subscription.unsubscribe();
 }
 
+function getAuthRedirectUrl() {
+  const fallback = typeof window !== "undefined" ? window.location.origin : "";
+  return configuredAuthRedirectUrl || fallback;
+}
+
 export async function linkAnonymousEmail(email: string) {
   if (!supabase) throw new Error("Supabase is not configured.");
   const { data, error } = await supabase.auth.updateUser(
     { email },
-    { emailRedirectTo: window.location.origin },
+    { emailRedirectTo: getAuthRedirectUrl() },
   );
   if (error) throw error;
   return data.user;
@@ -202,7 +230,7 @@ export async function signInExistingWithEmail(email: string) {
   const { error } = await supabase.auth.signInWithOtp({
     email,
     options: {
-      emailRedirectTo: window.location.origin,
+      emailRedirectTo: getAuthRedirectUrl(),
       shouldCreateUser: false,
     },
   });
@@ -211,7 +239,7 @@ export async function signInExistingWithEmail(email: string) {
 
 export async function continueWithOAuth(provider: Extract<Provider, "google" | "github">, isAnonymous: boolean) {
   if (!supabase) throw new Error("Supabase is not configured.");
-  const credentials = { provider, options: { redirectTo: window.location.origin } } as const;
+  const credentials = { provider, options: { redirectTo: getAuthRedirectUrl() } } as const;
   const { data, error } = isAnonymous
     ? await supabase.auth.linkIdentity(credentials)
     : await supabase.auth.signInWithOAuth(credentials);
@@ -485,6 +513,131 @@ export async function runLiveAssist(input: { mode: LiveAssistMode; goal: string;
     citations: citationRows.flatMap((citation) => Number.isInteger(citation.number) && typeof citation.memory?.id === "string" && typeof citation.memory.title === "string" ? [{ number: citation.number as number, memoryId: citation.memory.id, title: citation.memory.title }] : []),
     model: typeof data?.model === "string" ? data.model : null,
   };
+}
+
+function normalizeLiveAssistItem(value: unknown) {
+  if (!value || typeof value !== "object") return null;
+  const item = value as { text?: unknown; citations?: unknown };
+  if (typeof item.text !== "string") return null;
+  return {
+    text: item.text,
+    citations: Array.isArray(item.citations) ? item.citations.filter((citation): citation is number => Number.isInteger(citation)) : [],
+  };
+}
+
+function normalizeLiveAssistBriefing(value: Json | null): LiveAssistBriefing | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const briefing = value as Record<string, unknown>;
+  const brief = typeof briefing.brief === "string" ? briefing.brief : "";
+  if (!brief) return null;
+  const briefCitations = Array.isArray(briefing.briefCitations)
+    ? briefing.briefCitations.filter((citation): citation is number => Number.isInteger(citation))
+    : [];
+  const citations = Array.isArray(briefing.citations)
+    ? briefing.citations.flatMap((candidate) => {
+        if (!candidate || typeof candidate !== "object") return [];
+        const citation = candidate as { number?: unknown; memoryId?: unknown; title?: unknown };
+        if (!Number.isInteger(citation.number) || typeof citation.memoryId !== "string" || typeof citation.title !== "string") return [];
+        return [{ number: citation.number as number, memoryId: citation.memoryId, title: citation.title }];
+      })
+    : [];
+  return {
+    brief,
+    briefCitations,
+    talkingPoints: Array.isArray(briefing.talkingPoints) ? briefing.talkingPoints.map(normalizeLiveAssistItem).filter((item): item is LiveAssistItem => Boolean(item)) : [],
+    commitments: Array.isArray(briefing.commitments) ? briefing.commitments.map(normalizeLiveAssistItem).filter((item): item is LiveAssistItem => Boolean(item)) : [],
+    questions: Array.isArray(briefing.questions) ? briefing.questions.map(normalizeLiveAssistItem).filter((item): item is LiveAssistItem => Boolean(item)) : [],
+    citations,
+    model: typeof briefing.model === "string" ? briefing.model : null,
+  };
+}
+
+export async function listSidekickSessions(): Promise<SidekickSessionRecord[]> {
+  if (!supabase) return [];
+  await ensureUser();
+  const { data, error } = await supabase
+    .from("sidekick_sessions")
+    .select("id, mode, title, context_label, goal, selected_memory_ids, briefing, last_used_at, created_at, updated_at")
+    .order("updated_at", { ascending: false })
+    .limit(12);
+  if (error) throw error;
+  return (data ?? []).map((row) => ({
+    ...row,
+    mode: row.mode === "meeting" ? "meeting" : "conversation",
+    briefing: normalizeLiveAssistBriefing(row.briefing),
+  }));
+}
+
+export async function saveSidekickSession(input: {
+  id?: string;
+  mode: LiveAssistMode;
+  title: string;
+  contextLabel: string;
+  goal: string;
+  selectedMemoryIds: string[];
+  briefing: LiveAssistBriefing | null;
+  lastUsedAt?: string | null;
+}): Promise<SidekickSessionRecord> {
+  if (!supabase) throw new Error("Supabase is not configured.");
+  const user = await ensureUser();
+  const payload = {
+    id: input.id,
+    user_id: user.id,
+    mode: input.mode,
+    title: input.title.trim(),
+    context_label: input.contextLabel.trim(),
+    goal: input.goal.trim(),
+    selected_memory_ids: input.selectedMemoryIds,
+    briefing: input.briefing as unknown as Json,
+    last_used_at: input.lastUsedAt ?? new Date().toISOString(),
+  };
+  const { data, error } = await supabase
+    .from("sidekick_sessions")
+    .upsert(payload, { onConflict: "id" })
+    .select("id, mode, title, context_label, goal, selected_memory_ids, briefing, last_used_at, created_at, updated_at")
+    .single();
+  if (error) throw error;
+  return {
+    ...data,
+    mode: data.mode === "meeting" ? "meeting" : "conversation",
+    briefing: normalizeLiveAssistBriefing(data.briefing),
+  };
+}
+
+export async function listSidekickNotes(sessionId: string): Promise<SidekickNoteRecord[]> {
+  if (!supabase) return [];
+  await ensureUser();
+  const { data, error } = await supabase
+    .from("sidekick_notes")
+    .select("id, session_id, memory_id, body, created_at, updated_at")
+    .eq("session_id", sessionId)
+    .order("created_at", { ascending: true });
+  if (error) throw error;
+  return (data ?? []) as SidekickNoteRecord[];
+}
+
+export async function addSidekickNote(input: { sessionId: string; body: string; memoryId?: string | null }) {
+  if (!supabase) throw new Error("Supabase is not configured.");
+  const user = await ensureUser();
+  const { data, error } = await supabase
+    .from("sidekick_notes")
+    .insert({
+      user_id: user.id,
+      session_id: input.sessionId,
+      memory_id: input.memoryId ?? null,
+      body: input.body.trim(),
+    })
+    .select("id, session_id, memory_id, body, created_at, updated_at")
+    .single();
+  if (error) throw error;
+  return data as SidekickNoteRecord;
+}
+
+export async function deleteSidekickNote(noteId: string) {
+  if (!supabase) throw new Error("Supabase is not configured.");
+  await ensureUser();
+  const { error } = await supabase.from("sidekick_notes").delete().eq("id", noteId);
+  if (error) throw error;
 }
 
 export async function createFileMemory(file: File, title: string, uploadOptions: SignedUploadOptions = {}) {

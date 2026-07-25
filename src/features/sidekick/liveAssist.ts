@@ -13,3 +13,11 @@ export function formatLiveAssistBriefing(briefing: LiveAssistBriefing) {
   const sources = briefing.citations.length ? `\nSources\n${briefing.citations.map((citation) => `[${citation.number}] ${citation.title}`).join("\n")}` : "";
   return `Neuron Sidekick briefing\n\n${briefing.brief} ${citationLabel(briefing.briefCitations)}${section("Talking points", briefing.talkingPoints)}${section("Commitments", briefing.commitments)}${section("Questions to ask", briefing.questions)}${sources}`.trim();
 }
+
+export function buildSidekickSessionTitle(mode: "conversation" | "meeting", contextLabel: string, goal: string) {
+  const context = contextLabel.trim();
+  if (context) return context.slice(0, 120);
+  const trimmedGoal = goal.trim().replace(/\s+/g, " ");
+  if (trimmedGoal) return `${mode === "meeting" ? "Meeting" : "Conversation"}: ${trimmedGoal.slice(0, 72)}`.slice(0, 120);
+  return mode === "meeting" ? "Meeting prep" : "Conversation prep";
+}

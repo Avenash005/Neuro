@@ -28,6 +28,8 @@ Site URL: http://127.0.0.1:5173
 Redirect URL: http://127.0.0.1:5173/**
 ```
 
+Set `VITE_AUTH_REDIRECT_URL=http://127.0.0.1:5173` in `.env.local` so Neuron sends email and OAuth callbacks to the same allowed URL.
+
 When production is deployed, add the exact HTTPS production URL and keep localhost only for development.
 
 ## 3. Verify email authentication

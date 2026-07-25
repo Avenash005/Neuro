@@ -26,6 +26,7 @@ Neuron is a personal knowledge workspace for capturing notes, links, files, and 
 - Cost-free daily, weekly, and monthly recaps generated from real private activity
 - Source-backed flashcards and multiple-choice Study Mode with controlled legacy analysis
 - Privacy-scoped Neuron Sidekick for grounded conversation and meeting preparation
+- Saved Sidekick sessions and manual follow-up notes for repeatable conversations
 - Strict TypeScript and production builds
 
 The production roadmap is in [docs/PRODUCTION_PLAN.md](docs/PRODUCTION_PLAN.md).
@@ -42,6 +43,7 @@ Task extraction and confirmation are documented in [docs/ACTION_ITEMS.md](docs/A
 Daily and weekly recap behavior is documented in [docs/DAILY_WEEKLY_RECAPS.md](docs/DAILY_WEEKLY_RECAPS.md).
 Flashcards, quizzes, and controlled study analysis are documented in [docs/STUDY_MODE.md](docs/STUDY_MODE.md).
 Conversation and meeting preparation are documented in [docs/LIVE_ASSIST.md](docs/LIVE_ASSIST.md).
+Local startup and Vercel deployment are documented in [docs/START_AND_DEPLOY.md](docs/START_AND_DEPLOY.md).
 
 ## Branches
 
@@ -61,6 +63,7 @@ Conversation and meeting preparation are documented in [docs/LIVE_ASSIST.md](doc
 | `feature/daily-weekly-recaps` | Real activity summaries, themes, streaks, and completed work |
 | `feature/study-mode` | Private source-backed flashcards and quizzes |
 | `feature/live-assist` | Selected-memory conversation and meeting preparation |
+| `feature/sidekick-sessions` | Saved Sidekick sessions and manual meeting notes |
 
 For future work, create focused branches from `phase-2-production`, such as `feature/file-upload`, `feature/semantic-search`, or `fix/mobile-capture`.
 
@@ -114,6 +117,7 @@ Open [http://127.0.0.1:5173](http://127.0.0.1:5173).
 ```env
 VITE_SUPABASE_URL=https://your-project.supabase.co
 VITE_SUPABASE_PUBLISHABLE_KEY=your_publishable_key
+VITE_AUTH_REDIRECT_URL=http://127.0.0.1:5173
 ```
 
 Keep real credentials in `.env.local`. Never place a service-role key in frontend code or commit it to Git.
@@ -125,6 +129,8 @@ Keep real credentials in `.env.local`. Never place a service-role key in fronten
 3. Enable **Authentication → Sign In / Providers → Anonymous Sign-Ins** for the MVP.
 4. Restart the development server.
 5. Confirm the header displays **Supabase synced**.
+
+For email links and OAuth callbacks, Supabase must also allow the same URL as `VITE_AUTH_REDIRECT_URL`. During local testing, use `http://127.0.0.1:5173` as the Site URL and add `http://127.0.0.1:5173/**` as an allowed redirect URL.
 
 After applying the capture migration, deploy the processing worker using [docs/PHASE_2B_WORKER.md](docs/PHASE_2B_WORKER.md). Until its migration, secrets, and Edge Function are deployed, new files remain safely queued.
 

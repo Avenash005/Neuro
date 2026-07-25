@@ -10,7 +10,9 @@ Neuron Sidekick helps a signed-in user prepare for a conversation or meeting fro
 4. Describe the current situation or the help needed.
 5. Select up to eight private memories, directly or through a collection.
 6. Generate a briefing containing supported context, talking points, explicit commitments, and questions.
-7. Open citation buttons to verify the original memory, or copy individual suggestions or the entire brief manually.
+7. Save the session so you can reopen the same memory set, prompt, and generated brief later.
+8. Add manual follow-up notes to that saved session, optionally linking each note to one of the private memories.
+9. Open citation buttons to verify the original memory, or copy individual suggestions or the entire brief manually.
 
 ## Privacy boundary
 
@@ -41,10 +43,10 @@ The server validates model output before returning it:
 - Copy and selection helpers: `src/features/sidekick/liveAssist.ts`
 - Server: `supabase/functions/live-assist/index.ts`
 - Client boundary: `runLiveAssist` in `src/lib/supabase.ts`
+- Persistence: `supabase/migrations/20260721000100_sidekick_sessions.sql`
 
 ## Next phases
 
-1. Persist user-created Sidekick sessions and manually entered meeting notes.
-2. Add consent-based live transcription with a visible recording state and retention controls.
-3. Build an explicitly activated browser extension for supported messaging tools.
-4. Keep all generated replies in suggestion mode; never send automatically.
+1. Add consent-based live transcription with a visible recording state and retention controls.
+2. Build an explicitly activated browser extension for supported messaging tools.
+3. Keep all generated replies in suggestion mode; never send automatically.

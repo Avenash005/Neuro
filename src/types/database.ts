@@ -170,6 +170,71 @@ export type Database = {
         Update: { question?: string; normalized_question?: string; answer?: string; distractors?: string[]; confidence?: number; evidence?: string; updated_at?: string };
         Relationships: [];
       };
+      sidekick_sessions: {
+        Row: {
+          id: string;
+          user_id: string;
+          mode: string;
+          title: string;
+          context_label: string;
+          goal: string;
+          selected_memory_ids: string[];
+          briefing: Json;
+          last_used_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          mode: string;
+          title: string;
+          context_label?: string;
+          goal?: string;
+          selected_memory_ids?: string[];
+          briefing?: Json;
+          last_used_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          mode?: string;
+          title?: string;
+          context_label?: string;
+          goal?: string;
+          selected_memory_ids?: string[];
+          briefing?: Json;
+          last_used_at?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      sidekick_notes: {
+        Row: {
+          id: string;
+          user_id: string;
+          session_id: string;
+          memory_id: string | null;
+          body: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          session_id: string;
+          memory_id?: string | null;
+          body: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          memory_id?: string | null;
+          body?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       profiles: {
         Row: {
           id: string;

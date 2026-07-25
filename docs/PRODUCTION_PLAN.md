@@ -170,6 +170,7 @@ Goal: turn stored information into useful action.
 - [x] Extract tasks and reminders with user confirmation
 - [x] Generate daily and weekly recaps
 - [x] Add privacy-scoped conversation and meeting preparation with citations
+- [x] Persist Sidekick sessions and manual meeting notes
 
 ### Phase 3 — Scale and ecosystem
 
