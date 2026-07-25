@@ -12,6 +12,9 @@ export type MemoryInput = {
   content: string;
   kind: MemoryKind;
   sourceUrl?: string;
+  summary?: string | null;
+  is_favorite?: boolean;
+  tags?: string[];
 };
 
 export type MemoryRecord = MemoryInput & {
@@ -297,6 +300,9 @@ export async function createMemory(input: MemoryInput) {
       processing_status: "pending",
       source_url: sourceUrl,
       content_fingerprint: contentFingerprint,
+      summary: input.summary ?? null,
+      is_favorite: input.is_favorite ?? false,
+      tags: input.tags ?? [],
     })
     .select("id, title, content, kind, source_url, processing_status, created_at, storage_path, original_filename, mime_type, file_size, summary, extracted_text, extracted_at, is_favorite, tags, graph_analyzed_at, study_analyzed_at")
     .single();

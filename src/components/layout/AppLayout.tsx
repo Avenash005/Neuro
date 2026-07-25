@@ -1,28 +1,33 @@
 import {
-  ArrowRight,
   Bell,
-  Clock3,
-  CalendarDays,
-  GraduationCap,
   Command,
   FolderKanban,
   Home,
   Layers3,
   Menu,
-  Network,
-  ListTodo,
   PanelLeftClose,
   Plus,
   Settings,
   Sparkles,
+  Sun,
+  Moon,
+  Search,
+  UploadCloud,
+  GraduationCap,
+  CalendarDays,
+  Clock3,
+  Network,
+  ListTodo,
 } from "lucide-react";
-import { useState } from "react";
 import type { BackendStatus, View } from "../../types/app";
 
 export function Logo() {
   return (
     <div className="brand-mark" aria-label="Neuron">
-      <span /><span /><span /><span />
+      <span />
+      <span />
+      <span />
+      <span />
     </div>
   );
 }
@@ -36,61 +41,109 @@ type SidebarProps = {
   onProfileClick: () => void;
   onSearch: (query: string) => void;
   onSettingsClick: () => void;
+  collapsed: boolean;
+  setCollapsed: (collapsed: boolean) => void;
+  theme: "light" | "dark";
+  onToggleTheme: () => void;
 };
 
-export function Sidebar({ activeView, setActiveView, openCapture, profileName, profileSubtitle, onProfileClick, onSearch, onSettingsClick }: SidebarProps) {
-  const [collapsed, setCollapsed] = useState(false);
+export function Sidebar({
+  activeView,
+  setActiveView,
+  openCapture,
+  profileName,
+  profileSubtitle,
+  onProfileClick,
+  onSearch,
+  onSettingsClick,
+  collapsed,
+  setCollapsed,
+  theme,
+  onToggleTheme,
+}: SidebarProps) {
   const nav = [
-    { label: "Home" as View, icon: Home },
-    { label: "Sidekick" as View, icon: Sparkles },
-    { label: "Library" as View, icon: Layers3 },
-    { label: "Tasks" as View, icon: ListTodo },
-    { label: "Study" as View, icon: GraduationCap },
-    { label: "Recaps" as View, icon: CalendarDays },
-    { label: "Activity" as View, icon: Clock3 },
-    { label: "Collections" as View, icon: FolderKanban },
-    { label: "Graph" as View, icon: Network },
+    { label: "Home" as View, displayLabel: "Dashboard", icon: Home },
+    { label: "Sidekick" as View, displayLabel: "AI Chat", icon: Sparkles },
+    { label: "Library" as View, displayLabel: "Memories", icon: Layers3 },
+    { label: "Tasks" as View, displayLabel: "Tasks", icon: ListTodo },
+    { label: "Study" as View, displayLabel: "Study", icon: GraduationCap },
+    { label: "Recaps" as View, displayLabel: "Recaps", icon: CalendarDays },
+    { label: "Activity" as View, displayLabel: "Activity", icon: Clock3 },
+    { label: "Collections" as View, displayLabel: "Collections", icon: FolderKanban },
+    { label: "Graph" as View, displayLabel: "Knowledge Graph", icon: Network },
   ];
 
   return (
     <aside className={`sidebar ${collapsed ? "sidebar-collapsed" : ""}`}>
       <div className="sidebar-head">
-        <div className="brand-lockup"><Logo />{!collapsed && <span>neuron</span>}</div>
-        <button className="icon-button sidebar-toggle" onClick={() => setCollapsed(!collapsed)} aria-label="Toggle sidebar"><PanelLeftClose size={18} /></button>
+        <div className="brand-lockup">
+          <Logo />
+          {!collapsed && <span>neuron</span>}
+        </div>
+        <button
+          className="icon-button sidebar-toggle"
+          onClick={() => setCollapsed(!collapsed)}
+          aria-label="Toggle sidebar"
+        >
+          <PanelLeftClose size={18} style={{ transform: collapsed ? "rotate(180deg)" : "none", transition: "transform 0.2s" }} />
+        </button>
       </div>
-      <button className="capture-button" onClick={openCapture}><Plus size={18} />{!collapsed && <span>Quick capture</span>}</button>
+
       <nav className="side-nav" aria-label="Primary navigation">
-        {nav.map(({ label, icon: Icon }) => (
-          <button key={label} className={activeView === label ? "active" : ""} onClick={() => setActiveView(label)} title={label}>
-            <Icon size={19} strokeWidth={1.8} />{!collapsed && <span>{label === "Graph" ? "Knowledge graph" : label}</span>}
+        {nav.map(({ label, displayLabel, icon: Icon }) => (
+          <button
+            key={label}
+            className={activeView === label ? "active" : ""}
+            onClick={() => setActiveView(label)}
+            title={displayLabel}
+          >
+            <Icon size={19} strokeWidth={1.8} />
+            {!collapsed && <span>{displayLabel}</span>}
           </button>
         ))}
+
+        <button onClick={openCapture} title="Upload">
+          <UploadCloud size={19} strokeWidth={1.8} />
+          {!collapsed && <span>Upload</span>}
+        </button>
+        <button onClick={() => onSearch("")} title="Search">
+          <Search size={19} strokeWidth={1.8} />
+          {!collapsed && <span>Search</span>}
+        </button>
+        <button onClick={onSettingsClick} title="Settings">
+          <Settings size={19} strokeWidth={1.8} />
+          {!collapsed && <span>Settings</span>}
+        </button>
       </nav>
-      {!collapsed && (
-        <div className="sidebar-section">
-          <div className="section-label"><span>Favorites</span><button aria-label="Create collection" onClick={() => setActiveView("Collections")}><Plus size={14} /></button></div>
-          <button onClick={() => onSearch("Neuron")}><span className="nav-dot violet" />Neuron</button>
-          <button onClick={() => onSearch("Web development")}><span className="nav-dot green" />Web development</button>
-          <button onClick={() => onSearch("Startup")}><span className="nav-dot orange" />Startup library</button>
-        </div>
-      )}
+
       <div className="sidebar-bottom">
-        <button title="Settings" onClick={onSettingsClick}><Settings size={19} />{!collapsed && <span>Settings</span>}</button>
-        <button className="profile-button" title="Profile and account" onClick={onProfileClick}><span className="avatar">{profileName.slice(0, 2).toUpperCase()}</span>{!collapsed && <span className="profile-copy"><strong>{profileName}</strong><small>{profileSubtitle}</small></span>}</button>
+        <button onClick={onToggleTheme} title={theme === "light" ? "Dark Mode" : "Light Mode"}>
+          {theme === "light" ? <Moon size={19} /> : <Sun size={19} />}
+          {!collapsed && <span>{theme === "light" ? "Dark Mode" : "Light Mode"}</span>}
+        </button>
+        <button className="profile-button" title="Profile and account" onClick={onProfileClick}>
+          <span className="avatar">{profileName.slice(0, 2).toUpperCase()}</span>
+          {!collapsed && (
+            <span className="profile-copy">
+              <strong>{profileName}</strong>
+              <small>{profileSubtitle}</small>
+            </span>
+          )}
+        </button>
       </div>
     </aside>
   );
 }
 
 export function SearchBox({ onSearch }: { onSearch: (query: string) => void }) {
-  const [query, setQuery] = useState("");
   return (
-    <form className="search-box" onSubmit={(event) => { event.preventDefault(); onSearch(query); }}>
-      <div className="search-icon"><Sparkles size={20} /></div>
-      <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Ask your second brain anything..." aria-label="Semantic search" />
-      <button type="submit" aria-label="Search"><ArrowRight size={19} /></button>
-      <span className="shortcut"><Command size={12} /> K</span>
-    </form>
+    <div className="search-box" onClick={() => onSearch("")} style={{ cursor: "pointer" }}>
+      <Search size={16} />
+      <input readOnly placeholder="Search memories... (⌘K)" aria-label="Semantic search" />
+      <span className="shortcut">
+        <Command size={10} />K
+      </span>
+    </div>
   );
 }
 
@@ -100,19 +153,57 @@ type HeaderProps = {
   openMobileNav: () => void;
   backendStatus: BackendStatus;
   openActivity: () => void;
+  openCapture: () => void;
+  onProfileClick: () => void;
 };
 
-export function Header({ onSearch, openAssistant, openMobileNav, backendStatus, openActivity }: HeaderProps) {
-  const statusLabel = backendStatus === "connected" ? "Supabase synced" : backendStatus === "connecting" ? "Connecting" : backendStatus === "error" ? "Setup needed" : "Local mode";
+export function Header({
+  onSearch,
+  openAssistant,
+  openMobileNav,
+  backendStatus,
+  openActivity,
+  openCapture,
+  onProfileClick,
+}: HeaderProps) {
+  const statusLabel =
+    backendStatus === "connected"
+      ? "Supabase synced"
+      : backendStatus === "connecting"
+      ? "Connecting"
+      : backendStatus === "error"
+      ? "Setup needed"
+      : "Local mode";
+
   return (
     <header className="topbar">
-      <button className="mobile-menu icon-button" onClick={openMobileNav} aria-label="Open menu"><Menu size={20} /></button>
-      <div className="mobile-brand"><Logo /><span>neuron</span></div>
-      <div className="header-search"><SearchBox onSearch={onSearch} /></div>
+      <button className="mobile-menu icon-button" onClick={openMobileNav} aria-label="Open menu">
+        <Menu size={20} />
+      </button>
+      <div className="mobile-brand">
+        <Logo />
+        <span>neuron</span>
+      </div>
+      <div className="header-search">
+        <SearchBox onSearch={onSearch} />
+      </div>
       <div className="top-actions">
-        <span className={`sync-status ${backendStatus}`}><i />{statusLabel}</span>
-        <button className="icon-button notification" aria-label="Open recent activity" onClick={openActivity}><Bell size={19} /><span /></button>
-        <button className="ask-ai" onClick={openAssistant}><Sparkles size={16} />Ask Neuron</button>
+        <span className={`sync-status ${backendStatus}`}>
+          <i />
+          {statusLabel}
+        </span>
+        <button className="icon-button notification" aria-label="Open recent activity" onClick={openActivity}>
+          <Bell size={19} />
+        </button>
+        <button className="icon-button" aria-label="Quick Add" title="Quick Add" onClick={openCapture}>
+          <Plus size={19} />
+        </button>
+        <button className="icon-button" aria-label="Ask AI Assistant" title="Ask AI Assistant" onClick={openAssistant}>
+          <Sparkles size={19} />
+        </button>
+        <button className="avatar" onClick={onProfileClick} style={{ cursor: "pointer", border: "none" }}>
+          U
+        </button>
       </div>
     </header>
   );
