@@ -103,6 +103,9 @@ export default function App() {
     setCaptureOpen(true);
   };
 
+  const profileName = authUser?.is_anonymous ? "Guest workspace" : authUser?.email?.split("@")[0] || "Neuron user";
+  const profileSubtitle = authUser?.is_anonymous ? "Make this account permanent" : "Synced account";
+
   const content = useMemo(() => {
     if (activeView === "Library") return <LibraryView onSearch={search} openCapture={openCapture} memories={syncedMemories} collections={syncedCollections} onRetry={retryProcessing} onDownload={downloadFile} onDelete={removeMemory} onToggleFavorite={toggleFavorite} onToggleCollection={toggleCollectionMembership} openMemoryId={openMemoryId} onOpenedMemory={() => setOpenMemoryId(null)} />;
     if (activeView === "Activity") return <ActivityView memories={syncedMemories} onOpenMemory={openSearchResult} openCapture={openCapture} />;
@@ -113,8 +116,8 @@ export default function App() {
     if (activeView === "Study") return <StudyView cards={studyCards} memories={syncedMemories} onOpenMemory={openSearchResult} onAnalyzeMemories={analyzeStudyMemories} />;
     if (activeView === "Sidekick") return <SidekickView memories={syncedMemories} collections={syncedCollections} onOpenMemory={openSearchResult} />;
     if (activeView === "Settings") return <SettingsView user={authUser} memories={syncedMemories} />;
-    return <Dashboard onSearch={search} openCapture={openCapture} openCaptureWithMode={openCaptureWithMode} openAssistant={() => setAssistantOpen(true)} openActivity={() => setActiveView("Activity")} openLibrary={() => setActiveView("Library")} openTasks={() => setActiveView("Tasks")} openRecaps={() => setActiveView("Recaps")} memories={syncedMemories} actionItems={actionItems} onOpenMemory={openSearchResult} onToggleFavorite={toggleFavorite} onCompleteTask={(id) => changeActionItemStatus(id, "completed")} />;
-  }, [activeView, syncedMemories, syncedCollections, knowledgeEntities, actionItems, studyCards, openMemoryId, authUser]);
+    return <Dashboard onSearch={search} openCapture={openCapture} openCaptureWithMode={openCaptureWithMode} openAssistant={() => setAssistantOpen(true)} openActivity={() => setActiveView("Activity")} openLibrary={() => setActiveView("Library")} openTasks={() => setActiveView("Tasks")} openRecaps={() => setActiveView("Recaps")} memories={syncedMemories} actionItems={actionItems} onOpenMemory={openSearchResult} onToggleFavorite={toggleFavorite} onCompleteTask={(id) => changeActionItemStatus(id, "completed")} profileName={profileName} />;
+  }, [activeView, syncedMemories, syncedCollections, knowledgeEntities, actionItems, studyCards, openMemoryId, authUser, profileName]);
 
   useEffect(() => {
     if (!isSupabaseConfigured) return;
@@ -410,9 +413,6 @@ export default function App() {
     }
   };
 
-  const profileName = authUser?.is_anonymous ? "Guest workspace" : authUser?.email?.split("@")[0] || "Neuron user";
-  const profileSubtitle = authUser?.is_anonymous ? "Make this account permanent" : "Synced account";
-
   return (
     <div className="app-shell">
       <div className={mobileNav ? "mobile-sidebar open" : "mobile-sidebar"}>
@@ -420,7 +420,7 @@ export default function App() {
         <Sidebar activeView={activeView} setActiveView={(view) => { setActiveView(view); setMobileNav(false); }} openCapture={() => { setCaptureOpen(true); setMobileNav(false); }} profileName={profileName} profileSubtitle={profileSubtitle} onProfileClick={() => { setActiveView("Settings"); setMobileNav(false); }} onSearch={(query) => { search(query); setMobileNav(false); }} onSettingsClick={() => { setActiveView("Settings"); setMobileNav(false); }} collapsed={collapsed} setCollapsed={setCollapsed} theme={theme} onToggleTheme={() => setTheme(theme === "light" ? "dark" : "light")} />
       </div>
       <div className="desktop-sidebar"><Sidebar activeView={activeView} setActiveView={setActiveView} openCapture={openCapture} profileName={profileName} profileSubtitle={profileSubtitle} onProfileClick={() => setActiveView("Settings")} onSearch={search} onSettingsClick={() => setActiveView("Settings")} collapsed={collapsed} setCollapsed={setCollapsed} theme={theme} onToggleTheme={() => setTheme(theme === "light" ? "dark" : "light")} /></div>
-      <div className={`workspace ${collapsed ? "workspace-collapsed" : ""}`}><Header onSearch={search} openAssistant={() => setAssistantOpen(true)} openMobileNav={() => setMobileNav(true)} backendStatus={backendStatus} openActivity={() => setActiveView("Activity")} openCapture={openCapture} onProfileClick={() => setActiveView("Settings")} />{content}</div>
+      <div className={`workspace ${collapsed ? "workspace-collapsed" : ""}`}><Header onSearch={search} openAssistant={() => setAssistantOpen(true)} openMobileNav={() => setMobileNav(true)} backendStatus={backendStatus} openActivity={() => setActiveView("Activity")} openCapture={openCapture} onProfileClick={() => setActiveView("Settings")} profileName={profileName} />{content}</div>
 
       <div className="mobile-bottom-nav">
         <button className={activeView === "Home" ? "active" : ""} onClick={() => setActiveView("Home")}>

@@ -49,10 +49,10 @@ export function CaptureModal({ onClose, onSave, defaultMode }: CaptureModalProps
 
   // Step 3: AI summary fields
   const [aiSummary, setAiSummary] = useState("");
-  const [aiKeyTopics, setAiKeyTopics] = useState("React Hooks, State Management, Front-end");
-  const [aiKeywords, setAiKeywords] = useState("useMemo, useCallback, renders, optimizing");
-  const [aiPeople, setAiPeople] = useState("Avenash");
-  const [aiTechnologies, setAiTechnologies] = useState("React, Vite, ESBuild");
+  const [aiKeyTopics, setAiKeyTopics] = useState("Architecture, Guidelines, Notes");
+  const [aiKeywords, setAiKeywords] = useState("core concepts, best practices, reference");
+  const [aiPeople, setAiPeople] = useState("Team");
+  const [aiTechnologies, setAiTechnologies] = useState("Web, Cloud, AI");
   const [aiDates, setAiDates] = useState(new Date().toLocaleDateString());
   const [aiReadingTime, setAiReadingTime] = useState("2 min read");
   const aiConfidence = "98%";
