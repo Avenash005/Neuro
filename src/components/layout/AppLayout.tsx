@@ -170,6 +170,7 @@ type HeaderProps = {
   openActivity: () => void;
   openCapture: () => void;
   onProfileClick: () => void;
+  profileName?: string;
 };
 
 export function Header({
@@ -180,15 +181,18 @@ export function Header({
   openActivity,
   openCapture,
   onProfileClick,
+  profileName = "Neuron User",
 }: HeaderProps) {
   const statusLabel =
     backendStatus === "connected"
-      ? "Supabase synced"
+      ? "Synced"
       : backendStatus === "connecting"
-      ? "Connecting"
+      ? "Connecting..."
       : backendStatus === "error"
-      ? "Setup needed"
-      : "Local mode";
+      ? "Setup Needed"
+      : "Local";
+
+  const avatarInitials = profileName.slice(0, 2).toUpperCase();
 
   return (
     <header className="topbar">
@@ -203,21 +207,21 @@ export function Header({
         <SearchBox onSearch={onSearch} />
       </div>
       <div className="top-actions">
-        <span className={`sync-status ${backendStatus}`}>
+        <span className={`sync-status ${backendStatus}`} title={`Backend: ${statusLabel}`}>
           <i />
-          {statusLabel}
+          <span>{statusLabel}</span>
         </span>
-        <button className="icon-button notification" aria-label="Open recent activity" onClick={openActivity}>
-          <Bell size={19} />
+        <button className="icon-button notification" aria-label="Open recent activity" title="Recent activity" onClick={openActivity}>
+          <Bell size={18} />
         </button>
-        <button className="icon-button" aria-label="Quick Add" title="Quick Add" onClick={openCapture}>
-          <Plus size={19} />
+        <button className="icon-button" aria-label="Quick Capture" title="Quick Capture (⌘N)" onClick={openCapture}>
+          <Plus size={18} />
         </button>
-        <button className="icon-button" aria-label="Ask AI Assistant" title="Ask AI Assistant" onClick={openAssistant}>
-          <Sparkles size={19} />
+        <button className="icon-button ask-ai-btn" aria-label="Ask AI Assistant" title="Ask AI Assistant" onClick={openAssistant}>
+          <Sparkles size={18} />
         </button>
-        <button className="avatar" onClick={onProfileClick} style={{ cursor: "pointer", border: "none" }}>
-          U
+        <button className="avatar header-avatar" onClick={onProfileClick} title={`Signed in as ${profileName}`} aria-label="Open profile and settings">
+          {avatarInitials}
         </button>
       </div>
     </header>

@@ -36,6 +36,7 @@ type LibraryViewProps = {
   onToggleCollection: (collectionId: string, memoryId: string) => Promise<void>;
   openMemoryId?: string | null;
   onOpenedMemory?: () => void;
+  initialSearchQuery?: string;
 };
 
 type LibrarySelection = {
@@ -59,7 +60,7 @@ function memoryToLibraryItem(memory: MemoryRecord): LibraryItem {
 }
 
 export function LibraryView({
-  onSearch,
+  onSearch: _onSearch,
   openCapture,
   memories,
   onRetry,
@@ -70,10 +71,18 @@ export function LibraryView({
   onToggleCollection,
   openMemoryId,
   onOpenedMemory,
+  initialSearchQuery = "",
 }: LibraryViewProps) {
   const [selection, setSelection] = useState<LibrarySelection | null>(null);
   const [typeFilter, setTypeFilter] = useState("all");
   const [sortOrder, setSortOrder] = useState("recent");
+  const [searchFilter, setSearchFilter] = useState(initialSearchQuery);
+
+  useEffect(() => {
+    if (initialSearchQuery !== undefined) {
+      setSearchFilter(initialSearchQuery);
+    }
+  }, [initialSearchQuery]);
   
   const syncedItems: LibraryItem[] = memories.map(memoryToLibraryItem);
   const allItems = memories.length ? syncedItems : [];
@@ -81,7 +90,15 @@ export function LibraryView({
   const visibleItems = allItems
     .filter((item) => {
       const memory = memories.find((m) => m.id === item.id);
-      return typeFilter === "all" || memory?.kind.toLowerCase() === typeFilter;
+      const matchesType = typeFilter === "all" || memory?.kind.toLowerCase() === typeFilter;
+      if (!matchesType) return false;
+      if (!searchFilter.trim()) return true;
+      const q = searchFilter.toLowerCase();
+      const matchesTitle = item.title.toLowerCase().includes(q);
+      const matchesDesc = item.description.toLowerCase().includes(q);
+      const matchesTags = memory?.tags?.some((t) => t.toLowerCase().includes(q)) ?? false;
+      const matchesKind = memory?.kind.toLowerCase().includes(q) ?? false;
+      return matchesTitle || matchesDesc || matchesTags || matchesKind;
     })
     .sort((left, right) => {
       if (sortOrder === "title") return left.title.localeCompare(right.title);
@@ -125,11 +142,15 @@ export function LibraryView({
           <div className="compact-search">
             <Search size={16} />
             <input
-              placeholder="Search library..."
-              onKeyDown={(event) => {
-                if (event.key === "Enter") onSearch(event.currentTarget.value);
-              }}
+              placeholder="Search memories, notes, tags..."
+              value={searchFilter}
+              onChange={(e) => setSearchFilter(e.target.value)}
             />
+            {searchFilter && (
+              <button onClick={() => setSearchFilter("")} className="text-slate-400 hover:text-slate-600 p-1" title="Clear search">
+                <X size={14} />
+              </button>
+            )}
           </div>
           <div className="library-filters">
             <label className="library-select">
