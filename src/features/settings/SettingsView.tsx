@@ -53,13 +53,15 @@ export function SettingsView({ user, memories }: SettingsViewProps) {
   const [activeTab, setActiveTab] = useState<TabType>("account");
   const [showToast, setShowToast] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const defaultUsername = user?.email ? user.email.split("@")[0] : "neuron_user";
+  const defaultFullName = user?.email ? user.email.split("@")[0].charAt(0).toUpperCase() + user.email.split("@")[0].slice(1) : "Neuron User";
 
   // Initial settings states for dirty check
   const [profileForm, setProfileForm] = useState({
-    fullName: "Avenash",
-    username: "avenash005",
-    email: user?.email || "avenash.v@example.com",
-    phone: "+91 98765 43210",
+    fullName: defaultFullName,
+    username: defaultUsername,
+    email: user?.email || "user@neuron.ai",
+    phone: "+1 (555) 234-5678",
     bio: "AI researcher & builder. Building my second brain.",
     timezone: "UTC+05:30 (India Standard Time)",
     language: "en-US",
@@ -67,7 +69,7 @@ export function SettingsView({ user, memories }: SettingsViewProps) {
 
   const [securityForm, setSecurityForm] = useState({
     twoFactor: true,
-    recoveryEmail: "backup.avenash@example.com",
+    recoveryEmail: user?.email ? `recovery.${user.email}` : "recovery@neuron.ai",
   });
 
   const [appearanceForm, setAppearanceForm] = useState({
@@ -292,7 +294,7 @@ export function SettingsView({ user, memories }: SettingsViewProps) {
                   </div>
 
                   <div className="flex items-center gap-4 py-2 border-b border-slate-100 dark:border-slate-800 pb-4">
-                    <div className="avatar w-16 h-16 text-lg font-bold">AV</div>
+                    <div className="avatar w-16 h-16 text-lg font-bold">{profileForm.fullName.slice(0, 2).toUpperCase()}</div>
                     <div>
                       <h4 className="text-sm font-semibold text-slate-800 dark:text-slate-200">Avatar Image</h4>
                       <p className="text-xs text-slate-400 mt-0.5">JPG, PNG or GIF. Max size 2MB.</p>
