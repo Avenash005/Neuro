@@ -18,6 +18,9 @@ import {
   Clock3,
   Network,
   ListTodo,
+  HardDrive,
+  Shield,
+  RefreshCw,
 } from "lucide-react";
 import type { BackendStatus, View } from "../../types/app";
 
@@ -71,6 +74,9 @@ export function Sidebar({
     { label: "Activity" as View, displayLabel: "Activity", icon: Clock3 },
     { label: "Collections" as View, displayLabel: "Collections", icon: FolderKanban },
     { label: "Graph" as View, displayLabel: "Knowledge Graph", icon: Network },
+    { label: "LocalKnowledge" as View, displayLabel: "Local Files", icon: HardDrive, dividerBefore: true },
+    { label: "Privacy" as View, displayLabel: "Privacy & Data", icon: Shield },
+    { label: "Sync" as View, displayLabel: "Sync Status", icon: RefreshCw },
   ];
 
   return (
@@ -90,16 +96,25 @@ export function Sidebar({
       </div>
 
       <nav className="side-nav" aria-label="Primary navigation">
-        {nav.map(({ label, displayLabel, icon: Icon }) => (
-          <button
-            key={label}
-            className={activeView === label ? "active" : ""}
-            onClick={() => setActiveView(label)}
-            title={displayLabel}
-          >
-            <Icon size={19} strokeWidth={1.8} />
-            {!collapsed && <span>{displayLabel}</span>}
-          </button>
+        {nav.map(({ label, displayLabel, icon: Icon, ...rest }) => (
+          <div key={label}>
+            {"dividerBefore" in rest && rest.dividerBefore && (
+              <div style={{
+                height: 1,
+                background: "var(--border-color)",
+                margin: "6px 12px",
+                opacity: 0.6,
+              }} />
+            )}
+            <button
+              className={activeView === label ? "active" : ""}
+              onClick={() => setActiveView(label)}
+              title={displayLabel}
+            >
+              <Icon size={19} strokeWidth={1.8} />
+              {!collapsed && <span>{displayLabel}</span>}
+            </button>
+          </div>
         ))}
 
         <button onClick={openCapture} title="Upload">
