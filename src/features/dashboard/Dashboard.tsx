@@ -38,6 +38,7 @@ type DashboardProps = {
   onOpenMemory: (memory: MemoryRecord) => void;
   onToggleFavorite: (memoryId: string, isFavorite: boolean) => Promise<void>;
   onCompleteTask: (taskId: string) => Promise<void>;
+  profileName?: string;
 };
 
 export function Dashboard({
@@ -54,6 +55,7 @@ export function Dashboard({
   onOpenMemory,
   onToggleFavorite,
   onCompleteTask,
+  profileName = "there",
 }: DashboardProps) {
   const today = new Intl.DateTimeFormat("en", { weekday: "long", month: "long", day: "numeric" }).format(new Date());
   
@@ -65,6 +67,11 @@ export function Dashboard({
   } else if (currentHour < 17) {
     greeting = "Good Afternoon";
   }
+
+  // Format first name nicely
+  const displayName = profileName && profileName !== "there" 
+    ? profileName.split(" ")[0].charAt(0).toUpperCase() + profileName.split(" ")[0].slice(1)
+    : "there";
 
   const focusTasks = actionItems.filter((item) => item.status === "accepted").slice(0, 3);
   const suggestionCount = actionItems.filter((item) => item.status === "suggested").length;
@@ -89,7 +96,7 @@ export function Dashboard({
     <main className="main-content">
       <motion.section className="welcome" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
         <div className="eyebrow"><span />{today}</div>
-        <h1>{greeting}, Avenash</h1>
+        <h1>{greeting}, {displayName}</h1>
         <p>Your mind has been busy. Here’s what’s worth remembering.</p>
         <div className="hero-search"><SearchBox onSearch={onSearch} /></div>
         <div className="prompt-chips">
