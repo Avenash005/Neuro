@@ -14,6 +14,9 @@ import { StudyView } from "./features/study/StudyView";
 import { SidekickView } from "./features/sidekick/SidekickView";
 import { CollectionsView, LibraryView } from "./features/views/FeatureViews";
 import { SettingsView } from "./features/settings/SettingsView";
+import { PrivacyDashboard } from "./features/privacy/PrivacyDashboard";
+import { LocalKnowledgeView } from "./features/local/LocalKnowledgeView";
+import { SyncStatusView } from "./features/sync/SyncStatusView";
 import {
   addMemoryToCollection,
   connectSupabase,
@@ -113,6 +116,19 @@ export default function App() {
     if (activeView === "Study") return <StudyView cards={studyCards} memories={syncedMemories} onOpenMemory={openSearchResult} onAnalyzeMemories={analyzeStudyMemories} />;
     if (activeView === "Sidekick") return <SidekickView memories={syncedMemories} collections={syncedCollections} onOpenMemory={openSearchResult} />;
     if (activeView === "Settings") return <SettingsView user={authUser} memories={syncedMemories} />;
+    // ── Hybrid Local + Cloud views ───────────────────────────────────────
+    if (activeView === "LocalKnowledge") return <LocalKnowledgeView />;
+    if (activeView === "Privacy") return (
+      <PrivacyDashboard
+        cloudMemoryCount={syncedMemories.length}
+        cloudStorageBytes={syncedMemories.reduce((a, m) => a + (m.file_size ?? 0), 0)}
+      />
+    );
+    if (activeView === "Sync") return (
+      <SyncStatusView
+        isOnline={navigator.onLine}
+      />
+    );
     return <Dashboard onSearch={search} openCapture={openCapture} openCaptureWithMode={openCaptureWithMode} openAssistant={() => setAssistantOpen(true)} openActivity={() => setActiveView("Activity")} openLibrary={() => setActiveView("Library")} openTasks={() => setActiveView("Tasks")} openRecaps={() => setActiveView("Recaps")} memories={syncedMemories} actionItems={actionItems} onOpenMemory={openSearchResult} onToggleFavorite={toggleFavorite} onCompleteTask={(id) => changeActionItemStatus(id, "completed")} />;
   }, [activeView, syncedMemories, syncedCollections, knowledgeEntities, actionItems, studyCards, openMemoryId, authUser]);
 

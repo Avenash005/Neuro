@@ -1,6 +1,6 @@
 import type { LucideIcon } from "lucide-react";
 
-export type View = "Home" | "Sidekick" | "Library" | "Tasks" | "Study" | "Recaps" | "Activity" | "Collections" | "Graph" | "Settings";
+export type View = "Home" | "Sidekick" | "Library" | "Tasks" | "Study" | "Recaps" | "Activity" | "Collections" | "Graph" | "Settings" | "LocalKnowledge" | "Privacy" | "Sync";
 
 export type BackendStatus = "connecting" | "connected" | "local" | "error";
 
