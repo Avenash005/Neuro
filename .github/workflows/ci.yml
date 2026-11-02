@@ -28,7 +28,7 @@ jobs:
         run: npm ci
 
       - name: Set up Deno
-        uses: denoland/setup-deno@041b854f97b325bd60e53e9dc2de9cb9b9ac3cba # v2.0.2
+        uses: denoland/setup-deno@v2
         with:
           deno-version: v2.x
 
