@@ -18,6 +18,10 @@ import {
   Clock3,
   Network,
   ListTodo,
+  Globe,
+  Bot,
+  Activity,
+  SearchCode,
 } from "lucide-react";
 import type { BackendStatus, View } from "../../types/app";
 
@@ -71,6 +75,11 @@ export function Sidebar({
     { label: "Activity" as View, displayLabel: "Activity", icon: Clock3 },
     { label: "Collections" as View, displayLabel: "Collections", icon: FolderKanban },
     { label: "Graph" as View, displayLabel: "Knowledge Graph", icon: Network },
+    // ── Universal Knowledge ────────────────────────────────────────────
+    { label: "UniversalSearch" as View, displayLabel: "Universal Search", icon: SearchCode, dividerBefore: true },
+    { label: "Integrations" as View, displayLabel: "Integrations", icon: Globe },
+    { label: "AIConnections" as View, displayLabel: "AI Connections", icon: Bot },
+    { label: "AuditLog" as View, displayLabel: "Activity Log", icon: Activity },
   ];
 
   return (
