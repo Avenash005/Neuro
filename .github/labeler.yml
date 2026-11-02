@@ -1,0 +1,55 @@
+documentation:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "docs/**"
+          - "*.md"
+
+tests:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "**/*.test.ts"
+          - "**/*_test.ts"
+
+github-actions:
+  - changed-files:
+      - any-glob-to-any-file:
+          - ".github/**"
+
+frontend:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "src/components/**"
+          - "src/features/**"
+          - "src/App.tsx"
+          - "src/index.css"
+          - "index.html"
+
+local-storage:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "src/features/local/**"
+          - "src/features/privacy/**"
+          - "src/features/sync/**"
+          - "src/lib/local*"
+          - "src/lib/syncEngine.ts"
+          - "src/types/local.ts"
+
+connectors:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "src/features/integrations/**"
+          - "src/features/search/**"
+          - "src/lib/connectors/**"
+          - "src/types/connectors.ts"
+
+database:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "supabase/migrations/**"
+          - "supabase/schema.sql"
+
+backend-workers:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "supabase/functions/**"
+

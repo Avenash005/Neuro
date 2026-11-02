@@ -21,6 +21,10 @@ import {
   HardDrive,
   Shield,
   RefreshCw,
+  SearchCode,
+  Globe,
+  Bot,
+  Activity,
 } from "lucide-react";
 import type { BackendStatus, View } from "../../types/app";
 
@@ -77,6 +81,10 @@ export function Sidebar({
     { label: "LocalKnowledge" as View, displayLabel: "Local Files", icon: HardDrive, dividerBefore: true },
     { label: "Privacy" as View, displayLabel: "Privacy & Data", icon: Shield },
     { label: "Sync" as View, displayLabel: "Sync Status", icon: RefreshCw },
+    { label: "UniversalSearch" as View, displayLabel: "Universal Search", icon: SearchCode, dividerBefore: true },
+    { label: "Integrations" as View, displayLabel: "Integrations", icon: Globe },
+    { label: "AIConnections" as View, displayLabel: "AI Connections", icon: Bot },
+    { label: "AuditLog" as View, displayLabel: "Activity Log", icon: Activity },
   ];
 
   return (

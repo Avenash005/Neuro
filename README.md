@@ -1,185 +1,229 @@
-# Neuron — Your AI Second Brain
+# Neuro AI — The Extensible Personal AI Second Brain
 
-Neuron is a personal knowledge workspace for capturing notes, links, files, and voice thoughts, then organizing them into a searchable memory system. This repository currently contains the Phase 1 MVP and the foundation for Phase 2 production development.
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.9-blue.svg)](https://www.typescriptlang.org/)
+[![React](https://img.shields.io/badge/React-18.3-61dafb.svg)](https://react.dev/)
+[![Vite](https://img.shields.io/badge/Vite-7.2-646cff.svg)](https://vitejs.dev/)
+[![Supabase](https://img.shields.io/badge/Supabase-Database%20%26%20Auth-3ECF8E.svg)](https://supabase.com/)
 
-## Current status
+Neuro AI is a privacy-first, hybrid personal knowledge workspace and AI second brain. It connects your notes, documents, local files, and external platforms (GitHub, Google Drive, Notion, Slack) into a searchable memory system with on-device indexing and grounded AI assistance.
 
-- Responsive dashboard, library, collections, and real-memory knowledge graph UI
-- Note, link, upload, and voice capture flows
-- Supabase anonymous authentication
-- Permanent email account upgrades and returning-user magic-link sign-in
-- Google/GitHub identity-linking UI
-- Supabase-backed memory creation and listing
-- Private file uploads and owner-only downloads (PDF, image, Office, text, and audio up to 10 MB)
-- Durable URL capture with visible processing state and retry controls
-- Server-side extraction worker for URLs, images/OCR, PDFs, Office files, text, and audio
-- AI summaries, tags, typed entities, and source-backed relationships stored separately from original source files
-- Owner-only Row Level Security policies
-- Versioned SQL migrations and typed database access
-- Error boundary, unit tests, and GitHub Actions CI
-- Live private hybrid search across exact terms and semantic meaning
-- Private Activity page with 7-day, 30-day, and all-time work history
-- Functional navigation, Library filters, and owner-scoped favorites and collections that sync across devices
-- Grounded Ask Neuron answers with validated, clickable private-memory citations
-- User-controlled, three-memory entity backfill with visible progress and no automatic provider spend
-- Source-backed task and reminder suggestions with explicit accept/dismiss confirmation
-- Cost-free daily, weekly, and monthly recaps generated from real private activity
-- Source-backed flashcards and multiple-choice Study Mode with controlled legacy analysis
-- Privacy-scoped Neuron Sidekick for grounded conversation and meeting preparation
-- Saved Sidekick sessions and manual follow-up notes for repeatable conversations
-- Strict TypeScript and production builds
+---
 
-The production roadmap is in [docs/PRODUCTION_PLAN.md](docs/PRODUCTION_PLAN.md).
-Phase 2A dashboard setup is in [docs/PHASE_2A_SETUP.md](docs/PHASE_2A_SETUP.md).
-Phase 2B capture setup is in [docs/PHASE_2B_SETUP.md](docs/PHASE_2B_SETUP.md).
-Phase 2B worker deployment is in [docs/PHASE_2B_WORKER.md](docs/PHASE_2B_WORKER.md).
-Phase 2C hybrid search is in [docs/PHASE_2C_SEARCH.md](docs/PHASE_2C_SEARCH.md).
-Activity history and interaction behavior is in [docs/ACTIVITY_HISTORY.md](docs/ACTIVITY_HISTORY.md).
-Grounded assistant architecture is in [docs/GROUNDED_ASSISTANT.md](docs/GROUNDED_ASSISTANT.md).
-Persistent favorites and collections are documented in [docs/PERSISTENT_ORGANIZATION.md](docs/PERSISTENT_ORGANIZATION.md).
-Knowledge graph behavior is documented in [docs/KNOWLEDGE_GRAPH.md](docs/KNOWLEDGE_GRAPH.md).
-Entity extraction and provenance are documented in [docs/ENTITY_EXTRACTION.md](docs/ENTITY_EXTRACTION.md).
-Task extraction and confirmation are documented in [docs/ACTION_ITEMS.md](docs/ACTION_ITEMS.md).
-Daily and weekly recap behavior is documented in [docs/DAILY_WEEKLY_RECAPS.md](docs/DAILY_WEEKLY_RECAPS.md).
-Flashcards, quizzes, and controlled study analysis are documented in [docs/STUDY_MODE.md](docs/STUDY_MODE.md).
-Conversation and meeting preparation are documented in [docs/LIVE_ASSIST.md](docs/LIVE_ASSIST.md).
-Local startup and Vercel deployment are documented in [docs/START_AND_DEPLOY.md](docs/START_AND_DEPLOY.md).
+## The Problem & Our Approach
 
-## Branches
+Knowledge workers, researchers, and developers constantly juggle fragmented information across disparate silos: local directories, browser tabs, cloud drives, and workplace tools. Existing cloud note-taking and second-brain tools often sacrifice privacy, require uploading all private files to external servers, or lack grounded AI reasoning with transparent citations.
 
-| Branch | Purpose |
-| --- | --- |
-| `main` | Stable Phase 1 MVP baseline |
-| `phase-2-production` | Integration branch for production architecture and completed Phase 2 features |
-| `feature/universal-capture` | Completed Phase 2B private capture milestone |
-| `feature/semantic-search` | Completed Phase 2C full-text, vector, and hybrid retrieval milestone |
-| `feature/activity-history` | Activity timeline and complete UI interaction pass |
-| `feature/grounded-assistant` | Private retrieval-augmented answers with verified citations |
-| `feature/persistent-organization` | Owner-scoped favorites, collections, and memory membership |
-| `feature/knowledge-graph` | Interactive graph generated from private memories and AI tags |
-| `feature/entity-graph` | Typed entity extraction and evidence-backed relationships |
-| `feature/controlled-entity-backfill` | Cost-capped reanalysis for existing memories |
-| `feature/action-items` | Confirmed, source-backed tasks and reminders |
-| `feature/daily-weekly-recaps` | Real activity summaries, themes, streaks, and completed work |
-| `feature/study-mode` | Private source-backed flashcards and quizzes |
-| `feature/live-assist` | Selected-memory conversation and meeting preparation |
-| `feature/sidekick-sessions` | Saved Sidekick sessions and manual meeting notes |
+**Neuro AI solves this through a hybrid architecture:**
+- **Local-First by Default:** Your local folders are indexed directly inside the browser using IndexedDB and the File System Access API. Data stays on your machine.
+- **Local AI & Cloud AI Hybrid:** Run fully private local inference and embeddings using [Ollama](https://ollama.com/), or seamlessly connect cloud intelligence (NVIDIA Nemotron / OpenAI) when requested.
+- **Universal Knowledge Connectors:** Connect external services (GitHub, Google Drive, Notion, Slack) through a unified retrieval pipeline.
+- **Model Context Protocol (MCP):** Connect external AI agents (Claude, ChatGPT, IDE agents) to your personal memory via a standardized MCP server.
 
-For future work, create focused branches from `phase-2-production`, such as `feature/file-upload`, `feature/semantic-search`, or `fix/mobile-capture`.
+---
 
-## Project structure
+## Key Features
+
+### 1. Private Capture & Ingestion
+- **Multimodal Capture:** Notes, links, files, and voice recordings.
+- **Private File Processing:** Uploads and extracts text from PDFs, Office docs, images (OCR), plain text, and audio.
+- **Deduplication:** Hash-based content fingerprinting prevents redundant uploads and duplicate links.
+
+### 2. Local-First Storage & Offline Privacy
+- **Direct OS Folder Indexing:** Connect local folders using the native File System Access API with an extension allowlist and size safeguards.
+- **On-Device Search:** IndexedDB storage with 6 dedicated stores for offline search and tag indexing.
+- **Incremental Sync Engine:** Hash-based change detection synchronizes only changed files with explicit conflict resolution (`Keep Local` vs `Keep Cloud`).
+- **Privacy Dashboard:** Transparent controls to toggle storage modes (`🔒 Local`, `⚡ Hybrid`, `☁ Cloud`) and disconnect sync without deleting cloud records.
+
+### 3. Knowledge Graph & Grounded Intelligence
+- **Interactive Knowledge Graph:** Dynamic visual graph generated from private memories, extracted entities, and shared tags.
+- **Grounded AI Assistant:** Ask questions about your personal knowledge with verified, clickable citations back to exact source memories.
+- **Sidekick Conversation Prep:** Prepare for meetings and discussions using grounded context extracted from selected memories.
+- **Study Mode & Flashcards:** Automatically generate review flashcards and quizzes from your captured notes.
+- **Daily & Weekly Recaps:** Automated recaps highlighting activity streaks, recurring themes, and completed action items.
+
+### 4. Universal Connectors & MCP Agent Integration
+- **Cross-Source Retrieval:** Query across local files, Supabase memories, and third-party platforms simultaneously.
+- **Third-Party Connectors:** Modular connectors for GitHub (code/issues/PRs), Google Drive, Notion, and Slack.
+- **MCP Server:** Secure Model Context Protocol endpoints allowing external AI assistants to safely query your second brain under strict user-controlled permissions.
+- **Immutable Audit Logging:** Every search, sync, and AI access event is logged locally for security transparency.
+
+---
+
+## Technology Stack
+
+| Layer | Technologies |
+|---|---|
+| **Frontend** | React 18, Vite 7, TypeScript 5, Tailwind CSS v4, Framer Motion, Lucide Icons, cmdk |
+| **Local Storage & Indexing** | IndexedDB, Browser File System Access API, Web Crypto API (`crypto.subtle`) |
+| **Local AI** | Ollama REST API (streaming chat & embeddings) |
+| **Cloud Backend** | Supabase (PostgreSQL with `pgvector`, Row Level Security, Storage Buckets, Auth) |
+| **Edge Functions** | Deno v2 runtime (multimodal processing worker, hybrid search, grounded assistant) |
+| **Testing & CI** | Vitest, TypeScript compiler (`tsc`), GitHub Actions |
+
+---
+
+## Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                             Neuro AI Frontend UI                            │
+│                 (React 18 + Vite 7 + Tailwind CSS v4)                       │
+├──────────────────────────────────────┬──────────────────────────────────────┤
+│        Local-First Subsystem         │       Cloud Backend (Supabase)       │
+├──────────────────────────────────────┼──────────────────────────────────────┤
+│ • File System Access API             │ • PostgreSQL with pgvector           │
+│ • IndexedDB (6 offline stores)       │ • Row Level Security (owner-only)    │
+│ • Local Text Chunking & Indexing     │ • Private Storage Buckets            │
+│ • Ollama Local AI & Embeddings       │ • Edge Functions (Deno Runtime)      │
+│ • Hash-based Incremental Sync Engine │   - NVIDIA Nemotron AI Processing    │
+│ • Privacy Dashboard & Storage Modes  │   - Grounded RAG Assistant           │
+├──────────────────────────────────────┴──────────────────────────────────────┤
+│               Universal Connectors & Model Context Protocol (MCP)           │
+│    GitHub, Google Drive, Notion, Slack, In-Memory Audit Log, MCP Server     │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Getting Started
+
+### Prerequisites
+- **Node.js:** v22.x or later (`node -v`)
+- **npm:** v10.x or later (`npm -v`)
+- *(Optional for Local AI)*: [Ollama](https://ollama.com/) running locally (`http://localhost:11434`)
+- *(Optional for Cloud AI)*: A [Supabase](https://supabase.com/) project
+
+### Installation
+
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/Avenash005/Neuro.git
+   cd Neuro
+   ```
+
+2. Install dependencies:
+   ```bash
+   npm ci
+   ```
+
+3. Configure environment variables:
+   ```bash
+   cp .env.example .env.local
+   ```
+   Edit `.env.local` with your configuration:
+   ```env
+   # Browser-safe Supabase configuration
+   VITE_SUPABASE_URL=https://your-project.supabase.co
+   VITE_SUPABASE_PUBLISHABLE_KEY=your_supabase_publishable_key
+   VITE_AUTH_REDIRECT_URL=http://127.0.0.1:5173
+   ```
+   *(Note: Local-first features work even without Supabase configured!)*
+
+4. Start the development server:
+   ```bash
+   npm run dev
+   ```
+   Open [http://localhost:5173](http://localhost:5173) in your browser.
+
+---
+
+## Available Scripts
+
+| Command | Purpose |
+|---|---|
+| `npm run dev` | Starts the Vite development server with hot module replacement |
+| `npm run typecheck` | Validates TypeScript types across the entire project (`tsc --noEmit`) |
+| `npm run test` | Executes unit and integration test suite via Vitest |
+| `npm run build` | Builds the optimized production bundle in `dist/` |
+| `npm run check` | Runs full quality check suite (`typecheck && test && build`) |
+| `npm run preview` | Locally previews the production build |
+
+---
+
+## Directory Structure
 
 ```text
-src/
-├── components/
-│   ├── layout/             # Sidebar, header, logo, global search
-│   └── overlays/           # Capture, search, and AI assistant panels
-├── data/                   # Temporary mock content for unfinished APIs
-├── features/
-│   ├── dashboard/          # Home dashboard and activity widgets
-│   ├── activity/           # Real past-work history, charts, and date grouping
-│   └── views/              # Library, collections, and graph screens
-├── lib/
-│   └── supabase.ts         # Supabase client and memory data access
-├── types/                  # Shared application types
-├── App.tsx                 # App orchestration and global state
-├── index.css               # Current global design system and layout styles
-└── main.tsx                # React entry point
-
-supabase/
-├── migrations/             # Versioned, replayable database changes
-├── functions/              # Secure processing and search Edge Functions
-└── schema.sql              # Current database schema reference
-
-docs/
-├── ACTIVITY_HISTORY.md     # Past-work page and interaction map
-├── GROUNDED_ASSISTANT.md   # Private AI answers and citation validation
-├── PHASE_2A_SETUP.md       # Required Supabase dashboard configuration
-├── PHASE_2B_WORKER.md      # NVIDIA processing worker deployment
-├── PHASE_2C_SEARCH.md      # Hybrid-search architecture and deployment
-└── PRODUCTION_PLAN.md      # Architecture mind map and delivery roadmap
+Neuro/
+├── .github/
+│   ├── ISSUE_TEMPLATE/     # Structured GitHub issue forms
+│   ├── workflows/          # GitHub Actions CI & PR Labeler workflows
+│   ├── dependabot.yml      # Dependabot dependency update configuration
+│   └── PULL_REQUEST_TEMPLATE.md # Contributor pull request checklist
+├── docs/                   # Architectural guides and setup documentation
+├── public/                 # Static assets and icons
+├── src/
+│   ├── components/         # Shared layout, header, sidebar, and modals
+│   ├── features/           # Domain views:
+│   │   ├── activity/       # Timeline of user memory activity
+│   │   ├── dashboard/      # Home dashboard & widgets
+│   │   ├── graph/          # Interactive knowledge graph
+│   │   ├── integrations/   # Connectors hub, AI connections, audit log
+│   │   ├── local/          # Local folder knowledge browser
+│   │   ├── privacy/        # Privacy and storage mode dashboard
+│   │   ├── recaps/         # Daily and weekly recap summaries
+│   │   ├── search/         # Universal search interface
+│   │   ├── settings/       # Account and identity management
+│   │   ├── sidekick/       # Conversational AI assistant & meeting prep
+│   │   ├── study/          # Flashcards & quizzes
+│   │   ├── tasks/          # Source-linked action items
+│   │   └── sync/           # Real-time synchronization & conflict resolver
+│   ├── lib/                # Core engines, IndexedDB, connectors, Supabase
+│   ├── types/              # TypeScript types (app, local, connectors)
+│   ├── App.tsx             # Application routing and state orchestration
+│   ├── index.css           # Design tokens, variables, and global styles
+│   └── main.tsx            # React entry point
+├── supabase/
+│   ├── functions/          # Deno Edge Functions (process-memory, search, etc.)
+│   └── migrations/         # Versioned PostgreSQL database migrations
+├── .env.example            # Sanitized environment variable template
+├── CHANGELOG.md            # Version release notes
+├── CONTRIBUTING.md         # Developer contribution guidelines
+├── CODE_OF_CONDUCT.md     # Community standard of conduct
+├── GOVERNANCE.md           # Decision-making and maintainer policy
+├── LICENSE                 # MIT License
+├── package.json            # Dependencies and scripts
+└── SECURITY.md             # Security policy and vulnerability disclosure
 ```
 
-## Local development
+---
 
-Requirements: Node.js 20+ and npm.
+## Contributing
 
-```bash
-npm install
-copy .env.example .env.local
-npm run dev
-```
+We welcome contributions from the community! To get started:
+1. Review our [Contributing Guidelines](CONTRIBUTING.md) and [Code of Conduct](CODE_OF_CONDUCT.md).
+2. Check out our [Open Issues](https://github.com/Avenash005/Neuro/issues) to find tasks or bug reports.
+3. Fork the repository, create a descriptive feature branch (`feature/<name>`), make your changes, and submit a Pull Request.
 
-Open [http://127.0.0.1:5173](http://127.0.0.1:5173).
+---
 
-### Environment variables
+## Security & Responsible Disclosure
 
-```env
-VITE_SUPABASE_URL=https://your-project.supabase.co
-VITE_SUPABASE_PUBLISHABLE_KEY=your_publishable_key
-VITE_AUTH_REDIRECT_URL=http://127.0.0.1:5173
-```
+If you discover a security vulnerability or exposed credential, please **do not** open a public issue. Review our [Security Policy](SECURITY.md) and submit a private report via [GitHub Private Vulnerability Advisory](https://github.com/Avenash005/Neuro/security/advisories/new).
 
-Keep real credentials in `.env.local`. Never place a service-role key in frontend code or commit it to Git.
+---
 
-## Supabase setup
+## Roadmap
 
-1. Copy `.env.example` to `.env.local` and add the browser-safe publishable key.
-2. For a new project, run [supabase/schema.sql](supabase/schema.sql) in the Supabase SQL Editor. For an existing project, run only the new files in `supabase/migrations/`, in filename order.
-3. Enable **Authentication → Sign In / Providers → Anonymous Sign-Ins** for the MVP.
-4. Restart the development server.
-5. Confirm the header displays **Supabase synced**.
+- [x] Phase 1: MVP Core Dashboard, notes, uploads, links, and collections.
+- [x] Phase 2A: Authentication, RLS, and owner-scoped memory isolation.
+- [x] Phase 2B: NVIDIA AI multimodal memory processing and summarization.
+- [x] Phase 2C: Semantic vector search, hybrid search, and citation grounding.
+- [x] 2.0 UI/UX: Design system polish, high-contrast modals, and unified navigation.
+- [x] Local-First Architecture: On-device IndexedDB, File System Access API, and Ollama integration.
+- [x] Universal Connectors & MCP: Cross-source search and external AI agent integration.
+- [ ] Mobile PWA companion and background syncing.
+- [ ] End-to-end client-side encryption for cloud-synced files.
+- [ ] Additional native connectors (Obsidian, Logseq, Apple Notes).
 
-For email links and OAuth callbacks, Supabase must also allow the same URL as `VITE_AUTH_REDIRECT_URL`. During local testing, use `http://127.0.0.1:5173` as the Site URL and add `http://127.0.0.1:5173/**` as an allowed redirect URL.
+---
 
-After applying the capture migration, deploy the processing worker using [docs/PHASE_2B_WORKER.md](docs/PHASE_2B_WORKER.md). Until its migration, secrets, and Edge Function are deployed, new files remain safely queued.
+## Maintainers
 
-Library rows open a complete memory detail view. Signed-in owners can retry processing, download private source files, or permanently delete a memory and its associated private file.
+- **Lead Maintainer:** [@Avenash005](https://github.com/Avenash005)
 
-Favorites and collections are stored in Supabase. Open any Library memory to add or remove it from a collection; deleting a collection keeps its memories.
+---
 
-New files and links are protected against duplicate saves with owner-scoped fingerprints. Files are matched by content, while links are canonicalized before comparison.
+## License
 
-Private file capture uses short-lived Supabase signed upload URLs with real progress and cancellation. Failed post-upload database writes trigger source-object cleanup.
-
-## Quality checks
-
-```bash
-npx tsc --noEmit
-npm run build
-```
-
-Or run the complete local/CI gate:
-
-```bash
-npm run check
-npm run check:worker
-```
-
-These commands run frontend type-checking, unit tests, the production build, and Deno validation for the Edge Function. They must pass before merging a branch.
-
-## Editing guide
-
-- Change global navigation or header: `src/components/layout/AppLayout.tsx`
-- Change capture/search/assistant dialogs: `src/components/overlays/AppOverlays.tsx`
-- Change dashboard widgets: `src/features/dashboard/Dashboard.tsx`
-- Change past-work history: `src/features/activity/ActivityView.tsx`
-- Change Library or Collections: `src/features/views/FeatureViews.tsx`
-- Change the knowledge graph UI: `src/features/graph/KnowledgeGraphView.tsx`
-- Change graph-building rules: `src/features/graph/graphData.ts`
-- Change Supabase queries: `src/lib/supabase.ts`
-- Change upload validation: `src/lib/uploads.ts`
-- Change database schema or security policies: `supabase/schema.sql`
-- Change ingestion/AI processing: `supabase/functions/process-memory/index.ts`
-- Change private hybrid search: `supabase/functions/search-memories/index.ts`
-- Change grounded AI answers: `supabase/functions/ask-neuron/index.ts`
-- Change temporary demo content: `src/data/mockData.ts`
-- Change colors and layout: `src/index.css`
-
-## Security rules
-
-- Use a publishable key in the browser; never expose the service-role key.
-- Enable RLS on every table exposed through the Supabase Data API.
-- Scope every user-owned row by `auth.uid()`.
-- Process untrusted files and AI jobs on the server, not in the browser.
-- Validate file type, file size, URLs, and model output before storage or rendering.
+This project is licensed under the [MIT License](LICENSE).

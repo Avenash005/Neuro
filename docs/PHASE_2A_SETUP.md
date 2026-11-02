@@ -1,6 +1,6 @@
 # Phase 2A Supabase Setup
 
-The application code is ready for permanent accounts. Complete these dashboard steps in project `wanonpqnfdhyvyjfrtrf`.
+The application code is ready for permanent accounts. Complete these dashboard steps in your Supabase project dashboard (`<your-project-ref>`).
 
 ## 1. Apply the Phase 2A migration
 

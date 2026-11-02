@@ -48,7 +48,7 @@ The recommended repeatable CLI flow is:
 
 ```bash
 npx supabase login
-npx supabase link --project-ref wanonpqnfdhyvyjfrtrf
+npx supabase link --project-ref <your-project-ref>
 npx supabase functions deploy process-memory
 ```
 
@@ -71,7 +71,7 @@ If processing fails, Library exposes retry. The worker records a bounded error, 
 A scheduler can POST to:
 
 ```text
-https://wanonpqnfdhyvyjfrtrf.supabase.co/functions/v1/process-memory
+https://<your-project-ref>.supabase.co/functions/v1/process-memory
 ```
 
 with JSON `{ "batchSize": 3 }` and the `x-worker-secret` header. Store the secret in Supabase Vault when configuring `pg_cron`/`pg_net`; do not embed it directly in SQL or client code.

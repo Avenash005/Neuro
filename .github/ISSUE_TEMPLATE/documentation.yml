@@ -1,0 +1,38 @@
+name: Documentation Issue
+description: Report a correction, gap, or improvement in Neuro AI documentation
+title: "[Docs]: "
+labels: ["documentation", "status: needs triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Accurate documentation helps everyone! Thank you for reporting a documentation issue.
+  - type: input
+    id: location
+    attributes:
+      label: Documentation Location
+      description: Which file, section, or URL contains the issue?
+      placeholder: E.g., docs/PHASE_2B_WORKER.md or README.md #Architecture
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Current Problem
+      description: What is inaccurate, outdated, confusing, or missing?
+    validations:
+      required: true
+  - type: textarea
+    id: proposed_correction
+    attributes:
+      label: Proposed Correction
+      description: What should the documentation say instead?
+    validations:
+      required: true
+  - type: checkboxes
+    id: contribution
+    attributes:
+      label: Contribution
+      options:
+        - label: I am willing to submit a pull request fixing this documentation.
+

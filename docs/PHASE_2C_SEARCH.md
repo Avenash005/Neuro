@@ -24,8 +24,8 @@ Apply and deploy with:
 
 ```powershell
 npx --yes supabase@latest db push --linked
-npx --yes supabase@latest functions deploy process-memory --project-ref wanonpqnfdhyvyjfrtrf --no-verify-jwt
-npx --yes supabase@latest functions deploy search-memories --project-ref wanonpqnfdhyvyjfrtrf --no-verify-jwt
+npx --yes supabase@latest functions deploy process-memory --project-ref <your-project-ref> --no-verify-jwt
+npx --yes supabase@latest functions deploy search-memories --project-ref <your-project-ref> --no-verify-jwt
 ```
 
 The existing `NVIDIA_API_KEY` secret is reused. The optional model override is:

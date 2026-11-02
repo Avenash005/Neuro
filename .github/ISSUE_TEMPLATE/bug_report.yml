@@ -1,0 +1,87 @@
+name: Bug Report
+description: Create a report to help us fix a bug in Neuro AI
+title: "[Bug]: "
+labels: ["bug", "status: needs triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for reporting a bug! Please search [existing issues](https://github.com/Avenash005/Neuro/issues) to verify this problem hasn't already been reported.
+        **Do NOT include private credentials, API keys, or personal secrets in this report.**
+  - type: textarea
+    id: summary
+    attributes:
+      label: Bug Summary
+      description: A clear and concise description of what the bug is.
+      placeholder: E.g., Sync status fails to detect offline status when network disconnects.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to Reproduce
+      description: Detailed steps explaining how to trigger the bug.
+      placeholder: |
+        1. Open 'Local Files' view
+        2. Click 'Add Connected Folder'
+        3. Select directory with markdown files
+        4. See error...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behaviour
+      description: What did you expect to happen?
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual Behaviour
+      description: What actually happened?
+    validations:
+      required: true
+  - type: dropdown
+    id: reproducibility
+    attributes:
+      label: Reproducibility
+      description: How consistently can you reproduce this bug?
+      options:
+        - "Always (100% of the time)"
+        - "Frequently (often happens)"
+        - "Intermittently (rare / hard to reproduce)"
+        - "Once (unable to reproduce again)"
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: |
+        Please specify your OS, Node.js version, browser, and whether Supabase / Ollama is connected.
+      value: |
+        - OS: [e.g. Windows 11, macOS Sequoia, Ubuntu 24.04]
+        - Browser: [e.g. Chrome 130, Firefox 131, Safari 18]
+        - Node.js Version: [e.g. v22.10.0]
+        - Storage Mode: [e.g. Local-only, Hybrid, Cloud-only]
+        - Ollama Running: [Yes / No]
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant Logs & Error Messages
+      description: |
+        Paste relevant browser console or terminal logs. **Redact any private tokens or API keys!**
+      render: shell
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Confirmation
+      options:
+        - label: I have searched existing issues and confirmed this is not a duplicate.
+          required: true
+        - label: I have sanitized all logs and confirmed no secrets or private keys are exposed.
+          required: true
+

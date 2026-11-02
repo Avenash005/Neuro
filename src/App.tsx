@@ -16,6 +16,10 @@ import { SettingsView } from "./features/settings/SettingsView";
 import { PrivacyDashboard } from "./features/privacy/PrivacyDashboard";
 import { LocalKnowledgeView } from "./features/local/LocalKnowledgeView";
 import { SyncStatusView } from "./features/sync/SyncStatusView";
+import { UniversalSearchView } from "./features/search/UniversalSearchView";
+import { IntegrationsHub } from "./features/integrations/IntegrationsHub";
+import { AIConnectionsView } from "./features/integrations/AIConnectionsView";
+import { AuditLogView } from "./features/integrations/AuditLogView";
 import {
   addMemoryToCollection,
   connectSupabase,
@@ -135,8 +139,13 @@ export default function App() {
         isOnline={navigator.onLine}
       />
     );
-    return <Dashboard onSearch={search} openCapture={openCapture} openCaptureWithMode={openCaptureWithMode} openAssistant={() => setAssistantOpen(true)} openActivity={() => setActiveView("Activity")} openLibrary={() => setActiveView("Library")} openTasks={() => setActiveView("Tasks")} openRecaps={() => setActiveView("Recaps")} memories={syncedMemories} actionItems={actionItems} onOpenMemory={openSearchResult} onToggleFavorite={toggleFavorite} onCompleteTask={(id) => changeActionItemStatus(id, "completed")} />;
-  }, [activeView, syncedMemories, syncedCollections, knowledgeEntities, actionItems, studyCards, openMemoryId, authUser]);
+    // ── Universal Knowledge Retrieval views ─────────────────────────────
+    if (activeView === "UniversalSearch") return <UniversalSearchView memories={syncedMemories} />;
+    if (activeView === "Integrations") return <IntegrationsHub memories={syncedMemories} />;
+    if (activeView === "AIConnections") return <AIConnectionsView />;
+    if (activeView === "AuditLog") return <AuditLogView />;
+    return <Dashboard onSearch={search} openCapture={openCapture} openCaptureWithMode={openCaptureWithMode} openAssistant={openAssistant} openActivity={() => setActiveView("Activity")} openLibrary={() => setActiveView("Library")} openTasks={() => setActiveView("Tasks")} openRecaps={() => setActiveView("Recaps")} memories={syncedMemories} actionItems={actionItems} onOpenMemory={openSearchResult} onToggleFavorite={toggleFavorite} onCompleteTask={(id) => changeActionItemStatus(id, "completed")} profileName={profileName} />;
+  }, [activeView, syncedMemories, syncedCollections, knowledgeEntities, actionItems, studyCards, openMemoryId, authUser, profileName, librarySearchQuery]);
 
   useEffect(() => {
     if (!isSupabaseConfigured) return;

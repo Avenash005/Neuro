@@ -26,7 +26,7 @@ When no relevant memory is found, Neuron says that the saved memories do not con
 ## Deployment
 
 ```powershell
-npx --yes supabase@latest functions deploy ask-neuron --project-ref wanonpqnfdhyvyjfrtrf --no-verify-jwt
+npx --yes supabase@latest functions deploy ask-neuron --project-ref <your-project-ref> --no-verify-jwt
 ```
 
 The function reuses `NVIDIA_API_KEY`. The optional model override is:

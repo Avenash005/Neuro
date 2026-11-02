@@ -1,4 +1,4 @@
-project_id = "wanonpqnfdhyvyjfrtrf"
+project_id = "your-project-ref"
 
 [functions.process-memory]
 # Authentication is verified inside the function so it can support both

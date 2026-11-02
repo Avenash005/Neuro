@@ -1,0 +1,19 @@
+# Code Ownership for Neuro AI
+# All pull requests affecting core areas will request review from @Avenash005.
+
+# Default owner for everything in the repository
+* @Avenash005
+
+# Frontend & Application
+/src/ @Avenash005
+
+# Database Migrations & Supabase Configuration
+/supabase/ @Avenash005
+
+# GitHub Actions & Contributor Infrastructure
+/.github/ @Avenash005
+
+# Documentation
+/docs/ @Avenash005
+*.md @Avenash005
+

@@ -1,4 +1,4 @@
--- Run this file in the Supabase SQL Editor for project wanonpqnfdhyvyjfrtrf.
+-- Run this file in the Supabase SQL Editor for project <your-project-ref>.
 create extension if not exists pgcrypto;
 
 create table if not exists public.memories (

@@ -1,7 +1,9 @@
 {
-  "name": "my-app",
+  "name": "neuro-ai",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.2.0",
+  "description": "Neuro AI — Open-source personal AI second brain and knowledge workspace",
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "dev": "vite --configLoader runner",

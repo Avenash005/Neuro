@@ -1,0 +1,46 @@
+name: Task or Improvement
+description: Propose an engineering task, code refactoring, or maintenance item
+title: "[Task]: "
+labels: ["refactor", "status: needs triage"]
+body:
+  - type: textarea
+    id: objective
+    attributes:
+      label: Objective
+      description: What is the primary engineering goal of this task?
+      placeholder: E.g., Refactor connector retry logic to use exponential backoff with jitter.
+    validations:
+      required: true
+  - type: textarea
+    id: background
+    attributes:
+      label: Background & Context
+      description: Why is this task needed now? What technical debt or limitation does it address?
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope of Work
+      description: List specific files, modules, or services affected.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance_criteria
+    attributes:
+      label: Acceptance Criteria
+      description: Bulleted list of conditions to verify completion.
+      placeholder: |
+        - [ ] All existing Vitest tests continue to pass
+        - [ ] New unit tests cover backoff calculation
+        - [ ] Zero increase in production bundle size
+    validations:
+      required: true
+  - type: textarea
+    id: testing_expectations
+    attributes:
+      label: Testing Expectations
+      description: What automated or manual testing is required for this change?
+    validations:
+      required: true
+
