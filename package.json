@@ -16,16 +16,16 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@supabase/server": "^1.4.0",
-    "@supabase/supabase-js": "^2.110.7",
-    "@tailwindcss/vite": "^4.1.18",
+    "@supabase/server": "^1.9.2",
+    "@supabase/supabase-js": "^2.119.0",
+    "@tailwindcss/vite": "^4.3.4",
     "cmdk": "^1.1.1",
     "framer-motion": "^12.42.2",
-    "lucide-react": "^1.24.0",
+    "lucide-react": "^1.70.0",
     "motion": "^12.42.2",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "react-router-dom": "^7.18.1",
+    "react-router-dom": "^7.18.5",
     "tailwindcss": "^4.1.18"
   },
   "devDependencies": {
