@@ -30,7 +30,7 @@ import type { BackendStatus, View } from "../../types/app";
 
 export function Logo() {
   return (
-    <div className="brand-mark" aria-label="Neuron">
+    <div className="brand-mark" aria-label="VIOLET">
       <span />
       <span />
       <span />
@@ -93,7 +93,7 @@ export function Sidebar({
       <div className="sidebar-head">
         <div className="brand-lockup">
           <Logo />
-          {!collapsed && <span>neuron</span>}
+          {!collapsed && <span>violet</span>}
         </div>
         <button
           className="icon-button sidebar-toggle"
@@ -190,7 +190,7 @@ export function Header({
   openActivity,
   openCapture,
   onProfileClick,
-  profileName = "Neuron User",
+  profileName = "VIOLET User",
 }: HeaderProps) {
   const statusLabel =
     backendStatus === "connected"
