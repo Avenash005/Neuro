@@ -27,6 +27,7 @@ class CommandSpec:
     executable: str
     args: tuple[str, ...]
     root_index: int
+    risk: str
 
 
 def _commands(raw: str) -> dict[str, CommandSpec]:
@@ -45,11 +46,14 @@ def _commands(raw: str) -> dict[str, CommandSpec]:
         executable = value.get("executable")
         args = value.get("args", [])
         root_index = value.get("root_index", 0)
+        risk = value.get("risk", "read_only")
         if not isinstance(executable, str) or not executable or not isinstance(args, list) or not all(isinstance(a, str) for a in args):
             raise RuntimeError(f"Invalid executable/args for command: {command_id}")
         if not isinstance(root_index, int) or root_index < 0:
             raise RuntimeError(f"Invalid root_index for command: {command_id}")
-        commands[command_id] = CommandSpec(executable, tuple(args), root_index)
+        if risk != "read_only":
+            raise RuntimeError(f"Only read_only commands are supported until approval grants exist: {command_id}")
+        commands[command_id] = CommandSpec(executable, tuple(args), root_index, risk)
     return commands
 
 
