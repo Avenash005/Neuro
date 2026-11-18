@@ -42,7 +42,7 @@ describe("evaluateVioletTool", () => {
     const result = evaluateVioletTool(tool, {
       enabled: true,
       grantedScopes: ["browser:navigate"],
-      userApprovedThisAction: true,
+      verifiedApprovalForExactOperation: true,
     });
     expect(result).toMatchObject({ allowed: true, requiresApproval: false });
   });
