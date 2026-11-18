@@ -1,6 +1,4 @@
 from pathlib import Path
-from types import MappingProxyType
-
 from fastapi.testclient import TestClient
 
 from violet_agent.config import CommandSpec, Settings
