@@ -27,7 +27,7 @@ class CommandSpec:
     executable: str
     args: tuple[str, ...]
     root_index: int
-    risk: str
+    risk: str = "read_only"
 
 
 def _commands(raw: str) -> dict[str, CommandSpec]:
