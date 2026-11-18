@@ -35,7 +35,7 @@ Use Python 3.12 on Windows 11:
 cd apps/violet-local-agent
 py -3.12 -m venv .venv
 .\.venv\Scripts\Activate.ps1
-python -m pip install -e .[dev]
+python -m pip install -e ".[dev]"
 Copy-Item .env.example .env
 ~~~
 
@@ -57,14 +57,15 @@ Open http://127.0.0.1:8765/docs. The /health endpoint is unauthenticated for loc
 
 ## Named command allowlist
 
-The default allowlist is empty. Configure VIOLET_COMMANDS_JSON as a JSON object mapping IDs to fixed executable, argument array and approved-root index. For example:
+The default allowlist is empty. Configure VIOLET_COMMANDS_JSON as a JSON object mapping IDs to fixed executable, argument array, approved-root index and risk. Only read_only commands are accepted until the local approval gateway is implemented. For example:
 
 ~~~json
 {
   "git_status": {
     "executable": "git",
     "args": ["status", "--short"],
-    "root_index": 0
+    "root_index": 0,
+    "risk": "read_only"
   },
   "python_version": {
     "executable": "python",
