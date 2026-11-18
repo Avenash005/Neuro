@@ -114,7 +114,7 @@ export default function App() {
     setCaptureOpen(true);
   };
 
-  const profileName = authUser?.is_anonymous ? "Guest workspace" : authUser?.email?.split("@")[0] || "Neuron user";
+  const profileName = authUser?.is_anonymous ? "Guest workspace" : authUser?.email?.split("@")[0] || "VIOLET user";
   const profileSubtitle = authUser?.is_anonymous ? "Make this account permanent" : "Synced account";
 
   const content = useMemo(() => {
