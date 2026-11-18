@@ -2,7 +2,7 @@
   "name": "neuro-ai",
   "private": true,
   "version": "0.2.0",
-  "description": "Neuro AI — Open-source personal AI second brain and knowledge workspace",
+  "description": "VIOLET AI — Personal AI Operating System powered by Neuro",
   "license": "MIT",
   "type": "module",
   "scripts": {
