@@ -4,7 +4,6 @@ import {
   Brain,
   CheckCircle2,
   Code2,
-  FolderOpen,
   Globe,
   MessageSquare,
   Monitor,
