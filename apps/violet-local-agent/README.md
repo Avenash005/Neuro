@@ -79,6 +79,7 @@ The request contains only command_id; it cannot add arguments or override the wo
 ## Tests
 
 ~~~powershell
+python -m pip install -e .[dev]
 python -m pytest
 ~~~
 
