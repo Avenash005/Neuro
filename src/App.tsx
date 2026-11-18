@@ -20,6 +20,7 @@ import { UniversalSearchView } from "./features/search/UniversalSearchView";
 import { IntegrationsHub } from "./features/integrations/IntegrationsHub";
 import { AIConnectionsView } from "./features/integrations/AIConnectionsView";
 import { AuditLogView } from "./features/integrations/AuditLogView";
+import { VioletCommandCenter } from "./features/violet/VioletCommandCenter";
 import {
   addMemoryToCollection,
   connectSupabase,
@@ -140,6 +141,7 @@ export default function App() {
       />
     );
     // ── Universal Knowledge Retrieval views ─────────────────────────────
+    if (activeView === "Violet") return <VioletCommandCenter />;
     if (activeView === "UniversalSearch") return <UniversalSearchView memories={syncedMemories} />;
     if (activeView === "Integrations") return <IntegrationsHub memories={syncedMemories} />;
     if (activeView === "AIConnections") return <AIConnectionsView />;
