@@ -71,6 +71,7 @@ export function Sidebar({
   const nav = [
     { label: "Home" as View, displayLabel: "Dashboard", icon: Home },
     { label: "Sidekick" as View, displayLabel: "AI Chat", icon: Sparkles },
+    { label: "Violet" as View, displayLabel: "VIOLET AI", icon: Bot },
     { label: "Library" as View, displayLabel: "Memories", icon: Layers3 },
     { label: "Tasks" as View, displayLabel: "Tasks", icon: ListTodo },
     { label: "Study" as View, displayLabel: "Study", icon: GraduationCap },
