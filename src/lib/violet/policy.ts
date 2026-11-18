@@ -8,7 +8,7 @@ export type VioletDecision =
 export interface VioletPolicyContext {
   enabled: boolean;
   grantedScopes: string[];
-  userApprovedThisAction?: boolean;
+  verifiedApprovalForExactOperation?: boolean;
   toolEnabled?: boolean;
 }
 
@@ -38,8 +38,8 @@ export function evaluateVioletTool(
     return { allowed: true, requiresApproval: false, reason: "Allowed by the configured tool policy." };
   }
 
-  if (context.userApprovedThisAction) {
-    return { allowed: true, requiresApproval: false, reason: "Exact action approval was supplied." };
+  if (context.verifiedApprovalForExactOperation) {
+    return { allowed: true, requiresApproval: false, reason: "Exact operation approval was verified by the trusted approval service." };
   }
 
   return {
