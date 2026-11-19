@@ -77,6 +77,36 @@ export interface FocusWindowResponse {
   message: string;
 }
 
+export interface UIElementBoundsEntry {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+  right: number;
+  bottom: number;
+}
+
+export interface UIElementEntry {
+  element_id: string;
+  name: string;
+  control_type: string;
+  class_name: string;
+  automation_id: string;
+  bounds?: UIElementBoundsEntry | null;
+  enabled: boolean;
+  visible: boolean;
+  children_count: number;
+  source: string;
+}
+
+export interface InspectWindowUIResponse {
+  window_title: string;
+  handle: number;
+  process_id: number;
+  element_count: number;
+  elements: UIElementEntry[];
+}
+
 export class VioletLocalAgentClient {
   private readonly baseUrl: string;
   private readonly token: string;
@@ -261,6 +291,24 @@ export class VioletLocalAgentClient {
       throw new Error(`Local agent focusWindow error (${res.status}): ${await res.text()}`);
     }
     return res.json() as Promise<FocusWindowResponse>;
+  }
+
+  async inspectWindowUI(request?: {
+    handle?: number;
+    title?: string;
+    max_depth?: number;
+    max_elements?: number;
+  }): Promise<InspectWindowUIResponse> {
+    const res = await this.fetchImpl(`${this.baseUrl}/v1/ui/inspect`, {
+      method: "POST",
+      headers: this.getHeaders("application/json"),
+      body: JSON.stringify(request || {}),
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!res.ok) {
+      throw new Error(`Local agent inspectWindowUI error (${res.status}): ${await res.text()}`);
+    }
+    return res.json() as Promise<InspectWindowUIResponse>;
   }
 
   async listFiles(path: string): Promise<LocalFileEntry[]> {

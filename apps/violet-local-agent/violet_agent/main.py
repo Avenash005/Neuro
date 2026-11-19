@@ -10,9 +10,11 @@ from pydantic import BaseModel, Field
 from .audit import AuditWriter
 from .config import Settings, load_settings
 from .models.desktop import DesktopInfoResponse, ScreenshotRegionRequest
+from .models.ui_element import InspectWindowUIRequest, InspectWindowUIResponse
 from .models.window import FocusWindowRequest, WindowInfo
 from .security import bearer_dependency, resolve_approved_path
 from .services.screen_capture import ScreenCaptureService
+from .services.ui_automation import UIAutomationService
 from .services.window_manager import WindowManagerService
 
 
@@ -32,6 +34,7 @@ def create_app(settings: Settings) -> FastAPI:
 
     screen_service = ScreenCaptureService()
     window_service = WindowManagerService()
+    ui_service = UIAutomationService(window_manager=window_service)
 
     @app.get("/health")
     def health():
@@ -52,6 +55,7 @@ def create_app(settings: Settings) -> FastAPI:
                 "desktop.screenshot_region",
                 "windows.list",
                 "windows.focus",
+                "ui.inspect",
             ],
             "approved_root_count": len(settings.allowed_roots),
             "named_commands": sorted(settings.commands.keys()),
@@ -160,6 +164,22 @@ def create_app(settings: Settings) -> FastAPI:
             raise
         except Exception as exc:
             raise HTTPException(status_code=500, detail=f"Failed to focus window: {type(exc).__name__}: {str(exc)}") from exc
+
+    # ── UI Automation Endpoints ─────────────────────────────────────────────
+
+    @app.post("/v1/ui/inspect", response_model=InspectWindowUIResponse)
+    def inspect_ui(
+        body: InspectWindowUIRequest,
+        _authorized: bool = Depends(require_auth),
+    ):
+        try:
+            result = ui_service.inspect_window_ui(body)
+            audit.record("ui.inspect", {"window_title": result.window_title, "element_count": result.element_count})
+            return result
+        except ValueError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=f"Failed to inspect UI: {type(exc).__name__}: {str(exc)}") from exc
 
     # ── Legacy / File Endpoints ─────────────────────────────────────────────
 

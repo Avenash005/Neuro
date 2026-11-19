@@ -468,6 +468,58 @@ export function createDefaultToolRegistry(options?: {
     }
   });
 
+  // ── 12. Computer: UI Inspect ────────────────────────────────────────────
+  const uiInspectManifest: VioletToolManifest = {
+    name: "computer.ui.inspect",
+    version: "1.0.0",
+    domain: "computer",
+    description: "Inspect accessible UI Automation element tree of a window (buttons, text fields, menus)",
+    inputSchema: {
+      type: "object",
+      properties: {
+        handle: { type: "number" },
+        title: { type: "string" },
+        max_depth: { type: "number" },
+        max_elements: { type: "number" },
+      },
+    },
+    outputSchema: { type: "object" },
+    requiredScopes: ["computer:ui:read"],
+    risk: "read_only",
+    platforms: ["windows"],
+    timeoutMs: 15000,
+    supportsIdempotency: true,
+    enabled: true,
+  };
+  registry.register(uiInspectManifest, async (args, context) => {
+    const client = resolveAgentClient(agentClient, context);
+    try {
+      const result = await client.inspectWindowUI({
+        handle: args.handle !== undefined ? Number(args.handle) : undefined,
+        title: args.title ? String(args.title) : undefined,
+        max_depth: args.max_depth ? Number(args.max_depth) : undefined,
+        max_elements: args.max_elements ? Number(args.max_elements) : undefined,
+      });
+      return {
+        status: "succeeded",
+        data: result,
+        evidence: result.elements.slice(0, 5).map((el) => ({
+          type: "text" as const,
+          reference: `ui:${el.control_type}:${el.name || el.element_id}`,
+        })),
+        summary: `Inspected UI of '${result.window_title}': found ${result.element_count} accessible element(s)`,
+        recoverable: false,
+      };
+    } catch (err) {
+      return {
+        status: "failed",
+        summary: err instanceof Error ? err.message : "Failed to inspect window UI",
+        recoverable: true,
+        evidence: [],
+      };
+    }
+  });
+
   return registry;
 }
 

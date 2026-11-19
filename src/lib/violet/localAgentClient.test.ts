@@ -193,4 +193,61 @@ describe("VioletLocalAgentClient", () => {
     expect(focus.success).toBe(true);
     expect(focus.message).toBe("Focused window");
   });
+
+  it("inspects window accessibility UI elements", async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        window_title: "Notepad",
+        handle: 1234,
+        process_id: 5678,
+        element_count: 2,
+        elements: [
+          {
+            element_id: "el_0_menu",
+            name: "File",
+            control_type: "MenuItem",
+            class_name: "MenuItem",
+            automation_id: "menu_file",
+            bounds: { left: 10, top: 10, width: 40, height: 20, right: 50, bottom: 30 },
+            enabled: true,
+            visible: true,
+            children_count: 0,
+            source: "uia",
+          },
+          {
+            element_id: "el_1_edit",
+            name: "Text Editor",
+            control_type: "Edit",
+            class_name: "Edit",
+            automation_id: "editor_01",
+            bounds: { left: 10, top: 40, width: 780, height: 500, right: 790, bottom: 540 },
+            enabled: true,
+            visible: true,
+            children_count: 0,
+            source: "uia",
+          },
+        ],
+      }),
+    });
+
+    const client = new VioletLocalAgentClient({
+      baseUrl: "http://127.0.0.1:8765",
+      token: "test-token",
+      fetchImpl: mockFetch as unknown as typeof fetch,
+    });
+
+    const ui = await client.inspectWindowUI({ title: "Notepad" });
+    expect(ui.element_count).toBe(2);
+    expect(ui.elements[0].name).toBe("File");
+    expect(ui.elements[1].control_type).toBe("Edit");
+    expect(mockFetch).toHaveBeenCalledWith(
+      "http://127.0.0.1:8765/v1/ui/inspect",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ title: "Notepad" }),
+      })
+    );
+  });
 });
