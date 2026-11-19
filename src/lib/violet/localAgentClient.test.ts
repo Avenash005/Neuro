@@ -423,4 +423,78 @@ describe("VioletLocalAgentClient", () => {
       expect.objectContaining({ method: "POST" })
     );
   });
+
+  it("grounds window elements with normalized coordinates", async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        window_title: "Notepad",
+        window_handle: 1234,
+        screen_width: 1920,
+        screen_height: 1080,
+        element_count: 1,
+        elements: [
+          {
+            element_id: "el_0",
+            name: "File",
+            control_type: "MenuItem",
+            automation_id: "menu_0",
+            pixel_bounds: { left: 10, top: 10, right: 50, bottom: 30, width: 40, height: 20 },
+            normalized_bounds: { left: 0.005, top: 0.009, right: 0.026, bottom: 0.027, width: 0.021, height: 0.018 },
+            center_pixel: { x: 30, y: 20 },
+            center_normalized: { x: 0.015, y: 0.018 },
+            enabled: true,
+            visible: true,
+          },
+        ],
+        timestamp: "2026-11-19T00:00:00Z",
+      }),
+    });
+
+    const client = new VioletLocalAgentClient({
+      baseUrl: "http://127.0.0.1:8765",
+      token: "test-token",
+      fetchImpl: mockFetch as unknown as typeof fetch,
+    });
+
+    const res = await client.groundWindowElements({ handle: 1234 });
+    expect(res.element_count).toBe(1);
+    expect(res.elements[0].normalized_bounds.left).toBe(0.005);
+    expect(mockFetch).toHaveBeenCalledWith(
+      "http://127.0.0.1:8765/v1/grounding/elements",
+      expect.objectContaining({ method: "POST" })
+    );
+  });
+
+  it("verifies post-action outcomes", async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        verified: true,
+        action_type: "open_notepad",
+        condition_results: [{ check_type: "window_exists", passed: true, message: "Window present" }],
+        evidence_summary: "Action verified SUCCEEDED",
+        verified_at: "2026-11-19T00:00:00Z",
+      }),
+    });
+
+    const client = new VioletLocalAgentClient({
+      baseUrl: "http://127.0.0.1:8765",
+      token: "test-token",
+      fetchImpl: mockFetch as unknown as typeof fetch,
+    });
+
+    const res = await client.verifyActionOutcome({
+      action_type: "open_notepad",
+      conditions: [{ check_type: "window_exists", expected_title: "Notepad" }],
+    });
+    expect(res.verified).toBe(true);
+    expect(res.condition_results[0].passed).toBe(true);
+    expect(mockFetch).toHaveBeenCalledWith(
+      "http://127.0.0.1:8765/v1/verification/verify",
+      expect.objectContaining({ method: "POST" })
+    );
+  });
 });

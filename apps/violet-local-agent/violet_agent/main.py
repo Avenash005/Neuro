@@ -16,6 +16,11 @@ from .models.action import (
     MouseActionRequest,
 )
 from .models.desktop import DesktopInfoResponse, ScreenshotRegionRequest
+from .models.grounding import (
+    PostActionVerificationRequest,
+    VerificationResult,
+    VisualGroundingResponse,
+)
 from .models.process import (
     LaunchAppRequest,
     LaunchAppResponse,
@@ -31,6 +36,7 @@ from .services.input_controller import InputControllerService
 from .services.process_manager import ProcessManagerService
 from .services.screen_capture import ScreenCaptureService
 from .services.ui_automation import UIAutomationService
+from .services.visual_grounding import VisualGroundingService
 from .services.window_manager import WindowManagerService
 
 
@@ -58,6 +64,11 @@ def create_app(settings: Settings) -> FastAPI:
     )
     process_service = ProcessManagerService()
     launcher_service = AppLauncherService(allowed_roots=settings.allowed_roots)
+    grounding_service = VisualGroundingService(
+        screen_service=screen_service,
+        window_service=window_service,
+        ui_service=ui_service,
+    )
 
     @app.get("/health")
     def health():
@@ -85,6 +96,8 @@ def create_app(settings: Settings) -> FastAPI:
                 "processes.list",
                 "processes.terminate",
                 "applications.launch",
+                "grounding.elements",
+                "action.verify",
             ],
             "approved_root_count": len(settings.allowed_roots),
             "named_commands": sorted(settings.commands.keys()),
@@ -288,6 +301,32 @@ def create_app(settings: Settings) -> FastAPI:
             if "Refusing to terminate" in result.message:
                 raise HTTPException(status_code=403, detail=result.message)
         return result
+
+    # ── Visual Grounding & Post-Action Verification ─────────────────────────
+
+    @app.post("/v1/grounding/elements", response_model=VisualGroundingResponse)
+    def ground_elements(
+        body: InspectWindowUIRequest,
+        _authorized: bool = Depends(require_auth),
+    ):
+        try:
+            result = grounding_service.ground_window_elements(body)
+            audit.record("grounding.elements", {"window": result.window_title, "count": result.element_count})
+            return result
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=f"Visual grounding failed: {type(exc).__name__}: {str(exc)}") from exc
+
+    @app.post("/v1/verification/verify", response_model=VerificationResult)
+    def verify_action(
+        body: PostActionVerificationRequest,
+        _authorized: bool = Depends(require_auth),
+    ):
+        try:
+            result = grounding_service.verify_action_outcome(body)
+            audit.record("action.verify", {"action": body.action_type, "verified": result.verified})
+            return result
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=f"Action verification failed: {type(exc).__name__}: {str(exc)}") from exc
 
     # ── Legacy / File Endpoints ─────────────────────────────────────────────
 

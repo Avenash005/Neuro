@@ -187,6 +187,69 @@ export interface TerminateProcessResponse {
   message: string;
 }
 
+export interface GroundedElement {
+  element_id: string;
+  name: string;
+  control_type: string;
+  automation_id: string;
+  pixel_bounds: {
+    left: number;
+    top: number;
+    right: number;
+    bottom: number;
+    width: number;
+    height: number;
+  };
+  normalized_bounds: {
+    left: number;
+    top: number;
+    right: number;
+    bottom: number;
+    width: number;
+    height: number;
+  };
+  center_pixel: { x: number; y: number };
+  center_normalized: { x: number; y: number };
+  enabled: boolean;
+  visible: boolean;
+}
+
+export interface VisualGroundingResponse {
+  window_title: string;
+  window_handle: number;
+  screen_width: number;
+  screen_height: number;
+  element_count: number;
+  elements: GroundedElement[];
+  timestamp: string;
+}
+
+export interface VerificationCondition {
+  check_type: "window_exists" | "window_title_contains" | "element_visible" | "dialog_opened";
+  expected_title?: string;
+  expected_element_name?: string;
+  expected_automation_id?: string;
+  timeout_seconds?: number;
+}
+
+export interface PostActionVerificationRequest {
+  action_type: string;
+  conditions: VerificationCondition[];
+  capture_screenshot_evidence?: boolean;
+}
+
+export interface VerificationResult {
+  verified: boolean;
+  action_type: string;
+  condition_results: Array<{
+    check_type: string;
+    passed: boolean;
+    message: string;
+  }>;
+  evidence_summary: string;
+  verified_at: string;
+}
+
 export class VioletLocalAgentClient {
   private readonly baseUrl: string;
   private readonly token: string;
@@ -528,5 +591,36 @@ export class VioletLocalAgentClient {
       throw new Error(`Local agent terminateProcess error (${res.status}): ${await res.text()}`);
     }
     return res.json() as Promise<TerminateProcessResponse>;
+  }
+
+  async groundWindowElements(request?: {
+    handle?: number;
+    title?: string;
+    max_depth?: number;
+    max_elements?: number;
+  }): Promise<VisualGroundingResponse> {
+    const res = await this.fetchImpl(`${this.baseUrl}/v1/grounding/elements`, {
+      method: "POST",
+      headers: this.getHeaders("application/json"),
+      body: JSON.stringify(request || {}),
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!res.ok) {
+      throw new Error(`Local agent groundWindowElements error (${res.status}): ${await res.text()}`);
+    }
+    return res.json() as Promise<VisualGroundingResponse>;
+  }
+
+  async verifyActionOutcome(request: PostActionVerificationRequest): Promise<VerificationResult> {
+    const res = await this.fetchImpl(`${this.baseUrl}/v1/verification/verify`, {
+      method: "POST",
+      headers: this.getHeaders("application/json"),
+      body: JSON.stringify(request),
+      signal: AbortSignal.timeout(35000),
+    });
+    if (!res.ok) {
+      throw new Error(`Local agent verifyActionOutcome error (${res.status}): ${await res.text()}`);
+    }
+    return res.json() as Promise<VerificationResult>;
   }
 }

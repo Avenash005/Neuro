@@ -838,6 +838,119 @@ export function createDefaultToolRegistry(options?: {
     }
   });
 
+  // ── 19. Computer: Grounding Elements ────────────────────────────────────
+  const groundingManifest: VioletToolManifest = {
+    name: "computer.grounding.elements",
+    version: "1.0.0",
+    domain: "computer",
+    description: "Inspect window elements and normalize their bounding boxes into [0.0, 1.0] coordinate space",
+    inputSchema: {
+      type: "object",
+      properties: {
+        handle: { type: "number" },
+        title: { type: "string" },
+        max_depth: { type: "number" },
+        max_elements: { type: "number" },
+      },
+    },
+    outputSchema: { type: "object" },
+    requiredScopes: ["computer:ui:read"],
+    risk: "read_only",
+    platforms: ["windows"],
+    timeoutMs: 15000,
+    supportsIdempotency: true,
+    enabled: true,
+  };
+  registry.register(groundingManifest, async (args, context) => {
+    const client = resolveAgentClient(agentClient, context);
+    try {
+      const result = await client.groundWindowElements({
+        handle: args.handle !== undefined ? Number(args.handle) : undefined,
+        title: args.title ? String(args.title) : undefined,
+        max_depth: args.max_depth !== undefined ? Number(args.max_depth) : undefined,
+        max_elements: args.max_elements !== undefined ? Number(args.max_elements) : undefined,
+      });
+      return {
+        status: "succeeded",
+        data: result,
+        evidence: result.elements.slice(0, 5).map((el) => ({
+          type: "text" as const,
+          reference: `grounded:${el.control_type}:${el.name || el.element_id}@(${el.center_normalized.x},${el.center_normalized.y})`,
+        })),
+        summary: `Grounded ${result.element_count} UI element(s) in window '${result.window_title}'`,
+        recoverable: false,
+      };
+    } catch (err) {
+      return {
+        status: "failed",
+        summary: err instanceof Error ? err.message : "Failed to visually ground elements",
+        recoverable: true,
+        evidence: [],
+      };
+    }
+  });
+
+  // ── 20. Computer: Action Verify ─────────────────────────────────────────
+  const actionVerifyManifest: VioletToolManifest = {
+    name: "computer.action.verify",
+    version: "1.0.0",
+    domain: "computer",
+    description: "Verify whether an automated desktop action achieved its intended outcome",
+    inputSchema: {
+      type: "object",
+      properties: {
+        action_type: { type: "string" },
+        conditions: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              check_type: { type: "string" },
+              expected_title: { type: "string" },
+              expected_element_name: { type: "string" },
+              expected_automation_id: { type: "string" },
+              timeout_seconds: { type: "number" },
+            },
+            required: ["check_type"],
+          },
+        },
+        capture_screenshot_evidence: { type: "boolean" },
+      },
+      required: ["action_type", "conditions"],
+    },
+    outputSchema: { type: "object" },
+    requiredScopes: ["computer:windows:read"],
+    risk: "read_only",
+    platforms: ["windows"],
+    timeoutMs: 35000,
+    supportsIdempotency: false,
+    enabled: true,
+  };
+  registry.register(actionVerifyManifest, async (args, context) => {
+    const client = resolveAgentClient(agentClient, context);
+    try {
+      const result = await client.verifyActionOutcome({
+        action_type: String(args.action_type),
+        conditions: (args.conditions as any[]) || [],
+        capture_screenshot_evidence: args.capture_screenshot_evidence !== undefined ? Boolean(args.capture_screenshot_evidence) : true,
+      });
+      return {
+        status: result.verified ? "succeeded" : "failed",
+        data: result,
+        evidence: [{ type: "text", reference: `verification:${result.action_type}:${result.verified ? 'passed' : 'failed'}` }],
+        summary: result.evidence_summary,
+        recoverable: !result.verified,
+      };
+    } catch (err) {
+      return {
+        status: "failed",
+        summary: err instanceof Error ? err.message : "Failed to execute post-action verification",
+        recoverable: true,
+        evidence: [],
+      };
+    }
+  });
+
   return registry;
 }
 
