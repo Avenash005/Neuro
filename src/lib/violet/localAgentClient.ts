@@ -145,6 +145,48 @@ export interface InputActionResult {
   error?: string | null;
 }
 
+export interface ProcessEntry {
+  pid: number;
+  name: string;
+  exe?: string | null;
+  cpu_percent?: number | null;
+  memory_mb?: number | null;
+  status: string;
+  create_time: string;
+  username?: string | null;
+}
+
+export interface ProcessListResponse {
+  processes: ProcessEntry[];
+  count: number;
+}
+
+export interface LaunchAppRequest {
+  app_name: string;
+  args?: string[];
+  working_dir?: string;
+}
+
+export interface LaunchAppResponse {
+  success: boolean;
+  pid?: number | null;
+  app_name: string;
+  executable: string;
+  message: string;
+}
+
+export interface TerminateProcessRequest {
+  pid: number;
+  force?: boolean;
+  reason?: string;
+}
+
+export interface TerminateProcessResponse {
+  success: boolean;
+  pid: number;
+  message: string;
+}
+
 export class VioletLocalAgentClient {
   private readonly baseUrl: string;
   private readonly token: string;
@@ -440,5 +482,51 @@ export class VioletLocalAgentClient {
       throw new Error(`Local agent clickElement error (${res.status}): ${await res.text()}`);
     }
     return res.json() as Promise<InputActionResult>;
+  }
+
+  async listProcesses(options?: {
+    limit?: number;
+    filter_name?: string;
+  }): Promise<ProcessListResponse> {
+    const params = new URLSearchParams();
+    if (options?.limit !== undefined) params.set("limit", String(options.limit));
+    if (options?.filter_name !== undefined) params.set("filter_name", options.filter_name);
+
+    const url = `${this.baseUrl}/v1/processes/list${params.toString() ? "?" + params.toString() : ""}`;
+    const res = await this.fetchImpl(url, {
+      method: "GET",
+      headers: this.getHeaders("application/json"),
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!res.ok) {
+      throw new Error(`Local agent listProcesses error (${res.status}): ${await res.text()}`);
+    }
+    return res.json() as Promise<ProcessListResponse>;
+  }
+
+  async launchApp(request: LaunchAppRequest): Promise<LaunchAppResponse> {
+    const res = await this.fetchImpl(`${this.baseUrl}/v1/applications/launch`, {
+      method: "POST",
+      headers: this.getHeaders("application/json"),
+      body: JSON.stringify(request),
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!res.ok) {
+      throw new Error(`Local agent launchApp error (${res.status}): ${await res.text()}`);
+    }
+    return res.json() as Promise<LaunchAppResponse>;
+  }
+
+  async terminateProcess(request: TerminateProcessRequest): Promise<TerminateProcessResponse> {
+    const res = await this.fetchImpl(`${this.baseUrl}/v1/processes/terminate`, {
+      method: "POST",
+      headers: this.getHeaders("application/json"),
+      body: JSON.stringify(request),
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!res.ok) {
+      throw new Error(`Local agent terminateProcess error (${res.status}): ${await res.text()}`);
+    }
+    return res.json() as Promise<TerminateProcessResponse>;
   }
 }

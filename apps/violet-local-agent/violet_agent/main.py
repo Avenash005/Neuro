@@ -16,10 +16,19 @@ from .models.action import (
     MouseActionRequest,
 )
 from .models.desktop import DesktopInfoResponse, ScreenshotRegionRequest
+from .models.process import (
+    LaunchAppRequest,
+    LaunchAppResponse,
+    ProcessListResponse,
+    TerminateProcessRequest,
+    TerminateProcessResponse,
+)
 from .models.ui_element import InspectWindowUIRequest, InspectWindowUIResponse
 from .models.window import FocusWindowRequest, WindowInfo
 from .security import bearer_dependency, resolve_approved_path
+from .services.app_launcher import AppLauncherService
 from .services.input_controller import InputControllerService
+from .services.process_manager import ProcessManagerService
 from .services.screen_capture import ScreenCaptureService
 from .services.ui_automation import UIAutomationService
 from .services.window_manager import WindowManagerService
@@ -47,6 +56,8 @@ def create_app(settings: Settings) -> FastAPI:
         window_service=window_service,
         ui_service=ui_service,
     )
+    process_service = ProcessManagerService()
+    launcher_service = AppLauncherService(allowed_roots=settings.allowed_roots)
 
     @app.get("/health")
     def health():
@@ -71,6 +82,9 @@ def create_app(settings: Settings) -> FastAPI:
                 "input.mouse",
                 "input.keyboard",
                 "input.click_element",
+                "processes.list",
+                "processes.terminate",
+                "applications.launch",
             ],
             "approved_root_count": len(settings.allowed_roots),
             "named_commands": sorted(settings.commands.keys()),
@@ -233,6 +247,46 @@ def create_app(settings: Settings) -> FastAPI:
     ):
         result = input_service.click_element(body)
         audit.record("input.click_element", {"success": result.success, "details": result.details})
+        return result
+
+    # ── Process & Application Management Endpoints ──────────────────────────
+
+    @app.get("/v1/processes/list", response_model=ProcessListResponse)
+    def list_processes_endpoint(
+        limit: int = Query(default=100, ge=1, le=500),
+        filter_name: str | None = Query(default=None),
+        _authorized: bool = Depends(require_auth),
+    ):
+        result = process_service.list_processes(limit=limit, filter_name=filter_name)
+        audit.record("processes.list", {"count": result.count, "filter": filter_name})
+        return result
+
+    @app.post("/v1/applications/launch", response_model=LaunchAppResponse)
+    def launch_application_endpoint(
+        body: LaunchAppRequest,
+        _authorized: bool = Depends(require_auth),
+    ):
+        try:
+            result = launcher_service.launch(body)
+            audit.record("applications.launch", {"app_name": body.app_name, "success": result.success, "pid": result.pid})
+            return result
+        except ValueError as exc:
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=f"Failed to launch application: {type(exc).__name__}: {str(exc)}") from exc
+
+    @app.post("/v1/processes/terminate", response_model=TerminateProcessResponse)
+    def terminate_process_endpoint(
+        body: TerminateProcessRequest,
+        _authorized: bool = Depends(require_auth),
+    ):
+        result = process_service.terminate_process(pid=body.pid, force=body.force)
+        audit.record("processes.terminate", {"pid": body.pid, "force": body.force, "success": result.success})
+        if not result.success:
+            if "does not exist" in result.message:
+                raise HTTPException(status_code=404, detail=result.message)
+            if "Refusing to terminate" in result.message:
+                raise HTTPException(status_code=403, detail=result.message)
         return result
 
     # ── Legacy / File Endpoints ─────────────────────────────────────────────

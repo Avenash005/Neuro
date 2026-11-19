@@ -694,6 +694,150 @@ export function createDefaultToolRegistry(options?: {
     }
   });
 
+  // ── 16. Computer: Processes List ────────────────────────────────────────
+  const processListManifest: VioletToolManifest = {
+    name: "computer.processes.list",
+    version: "1.0.0",
+    domain: "computer",
+    description: "List active Windows processes with PID, memory, and status",
+    inputSchema: {
+      type: "object",
+      properties: {
+        limit: { type: "number" },
+        filter_name: { type: "string" },
+      },
+    },
+    outputSchema: { type: "object" },
+    requiredScopes: ["computer:processes:read"],
+    risk: "read_only",
+    platforms: ["windows"],
+    timeoutMs: 10000,
+    supportsIdempotency: true,
+    enabled: true,
+  };
+  registry.register(processListManifest, async (args, context) => {
+    const client = resolveAgentClient(agentClient, context);
+    try {
+      const result = await client.listProcesses({
+        limit: args.limit !== undefined ? Number(args.limit) : undefined,
+        filter_name: args.filter_name ? String(args.filter_name) : undefined,
+      });
+      return {
+        status: "succeeded",
+        data: result,
+        evidence: result.processes.slice(0, 5).map((p) => ({
+          type: "text" as const,
+          reference: `process:${p.pid}:${p.name}`,
+        })),
+        summary: `Retrieved ${result.count} running process(es)`,
+        recoverable: false,
+      };
+    } catch (err) {
+      return {
+        status: "failed",
+        summary: err instanceof Error ? err.message : "Failed to list processes",
+        recoverable: true,
+        evidence: [],
+      };
+    }
+  });
+
+  // ── 17. Computer: Applications Launch ───────────────────────────────────
+  const launchAppManifest: VioletToolManifest = {
+    name: "computer.applications.launch",
+    version: "1.0.0",
+    domain: "computer",
+    description: "Launch an approved Windows application from the allowlist or workspace",
+    inputSchema: {
+      type: "object",
+      properties: {
+        app_name: { type: "string" },
+        args: { type: "array", items: { type: "string" } },
+        working_dir: { type: "string" },
+      },
+      required: ["app_name"],
+    },
+    outputSchema: { type: "object" },
+    requiredScopes: ["computer:applications:launch"],
+    risk: "reversible",
+    platforms: ["windows"],
+    timeoutMs: 15000,
+    supportsIdempotency: false,
+    enabled: true,
+  };
+  registry.register(launchAppManifest, async (args, context) => {
+    const client = resolveAgentClient(agentClient, context);
+    try {
+      const result = await client.launchApp({
+        app_name: String(args.app_name),
+        args: Array.isArray(args.args) ? args.args.map(String) : [],
+        working_dir: args.working_dir ? String(args.working_dir) : undefined,
+      });
+      return {
+        status: result.success ? "succeeded" : "failed",
+        data: result,
+        evidence: [{ type: "text", reference: `app_launch:${result.app_name}:${result.pid || "none"}` }],
+        summary: result.message,
+        recoverable: !result.success,
+      };
+    } catch (err) {
+      return {
+        status: "failed",
+        summary: err instanceof Error ? err.message : "Failed to launch application",
+        recoverable: true,
+        evidence: [],
+      };
+    }
+  });
+
+  // ── 18. Computer: Processes Terminate ───────────────────────────────────
+  const terminateProcessManifest: VioletToolManifest = {
+    name: "computer.processes.terminate",
+    version: "1.0.0",
+    domain: "computer",
+    description: "Terminate a running Windows process by PID (requires explicit approval)",
+    inputSchema: {
+      type: "object",
+      properties: {
+        pid: { type: "number" },
+        force: { type: "boolean" },
+        reason: { type: "string" },
+      },
+      required: ["pid"],
+    },
+    outputSchema: { type: "object" },
+    requiredScopes: ["computer:processes:terminate"],
+    risk: "destructive",
+    platforms: ["windows"],
+    timeoutMs: 10000,
+    supportsIdempotency: false,
+    enabled: true,
+  };
+  registry.register(terminateProcessManifest, async (args, context) => {
+    const client = resolveAgentClient(agentClient, context);
+    try {
+      const result = await client.terminateProcess({
+        pid: Number(args.pid),
+        force: Boolean(args.force),
+        reason: args.reason ? String(args.reason) : undefined,
+      });
+      return {
+        status: result.success ? "succeeded" : "failed",
+        data: result,
+        evidence: [{ type: "text", reference: `process_terminate:${result.pid}` }],
+        summary: result.message,
+        recoverable: !result.success,
+      };
+    } catch (err) {
+      return {
+        status: "failed",
+        summary: err instanceof Error ? err.message : "Failed to terminate process",
+        recoverable: true,
+        evidence: [],
+      };
+    }
+  });
+
   return registry;
 }
 

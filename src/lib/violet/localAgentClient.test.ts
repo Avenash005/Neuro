@@ -334,4 +334,93 @@ describe("VioletLocalAgentClient", () => {
       expect.objectContaining({ method: "POST" })
     );
   });
+
+  it("lists active processes with metadata", async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        processes: [
+          {
+            pid: 1234,
+            name: "notepad.exe",
+            exe: "C:\\Windows\\notepad.exe",
+            cpu_percent: 0.1,
+            memory_mb: 25.4,
+            status: "running",
+            create_time: "2026-11-19T00:00:00Z",
+          },
+        ],
+        count: 1,
+      }),
+    });
+
+    const client = new VioletLocalAgentClient({
+      baseUrl: "http://127.0.0.1:8765",
+      token: "test-token",
+      fetchImpl: mockFetch as unknown as typeof fetch,
+    });
+
+    const res = await client.listProcesses({ limit: 10, filter_name: "notepad" });
+    expect(res.count).toBe(1);
+    expect(res.processes[0].name).toBe("notepad.exe");
+    expect(mockFetch).toHaveBeenCalledWith(
+      "http://127.0.0.1:8765/v1/processes/list?limit=10&filter_name=notepad",
+      expect.objectContaining({ method: "GET" })
+    );
+  });
+
+  it("launches approved application", async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        success: true,
+        pid: 9876,
+        app_name: "notepad",
+        executable: "C:\\Windows\\notepad.exe",
+        message: "Successfully launched notepad",
+      }),
+    });
+
+    const client = new VioletLocalAgentClient({
+      baseUrl: "http://127.0.0.1:8765",
+      token: "test-token",
+      fetchImpl: mockFetch as unknown as typeof fetch,
+    });
+
+    const res = await client.launchApp({ app_name: "notepad" });
+    expect(res.success).toBe(true);
+    expect(res.pid).toBe(9876);
+    expect(mockFetch).toHaveBeenCalledWith(
+      "http://127.0.0.1:8765/v1/applications/launch",
+      expect.objectContaining({ method: "POST" })
+    );
+  });
+
+  it("terminates process by pid", async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        success: true,
+        pid: 9876,
+        message: "Successfully terminated process (PID: 9876)",
+      }),
+    });
+
+    const client = new VioletLocalAgentClient({
+      baseUrl: "http://127.0.0.1:8765",
+      token: "test-token",
+      fetchImpl: mockFetch as unknown as typeof fetch,
+    });
+
+    const res = await client.terminateProcess({ pid: 9876, force: true });
+    expect(res.success).toBe(true);
+    expect(res.pid).toBe(9876);
+    expect(mockFetch).toHaveBeenCalledWith(
+      "http://127.0.0.1:8765/v1/processes/terminate",
+      expect.objectContaining({ method: "POST" })
+    );
+  });
 });
