@@ -565,4 +565,48 @@ describe("VioletLocalAgentClient", () => {
     const revoked = await client.revokePairingSession(verify.session_token!);
     expect(revoked.revoked).toBe(true);
   });
+
+  it("handles emergency stop trigger, status, and resume", async () => {
+    const mockFetch = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ is_stopped: false }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          success: true,
+          is_stopped: true,
+          message: "Locked",
+          reason: "User emergency",
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          success: true,
+          is_stopped: false,
+          message: "Cleared",
+        }),
+      });
+
+    const client = new VioletLocalAgentClient({
+      baseUrl: "http://127.0.0.1:8765",
+      token: "test-token",
+      fetchImpl: mockFetch as unknown as typeof fetch,
+    });
+
+    const initial = await client.getEmergencyStopStatus();
+    expect(initial.is_stopped).toBe(false);
+
+    const triggered = await client.triggerEmergencyStop("User emergency");
+    expect(triggered.is_stopped).toBe(true);
+
+    const resumed = await client.resumeEmergencyStop();
+    expect(resumed.is_stopped).toBe(false);
+  });
 });

@@ -285,6 +285,20 @@ export interface SessionHeartbeatResponse {
   message: string;
 }
 
+export interface EmergencyStopStatus {
+  is_stopped: boolean;
+  triggered_at?: string | null;
+  reason?: string | null;
+}
+
+export interface EmergencyStopResponse {
+  success: boolean;
+  is_stopped: boolean;
+  message: string;
+  reason?: string;
+  triggered_at?: string;
+}
+
 export class VioletLocalAgentClient {
   private readonly baseUrl: string;
   private readonly token: string;
@@ -711,5 +725,41 @@ export class VioletLocalAgentClient {
       throw new Error(`Local agent revokePairingSession error (${res.status}): ${await res.text()}`);
     }
     return res.json() as Promise<{ revoked: boolean; message: string }>;
+  }
+
+  async triggerEmergencyStop(reason?: string): Promise<EmergencyStopResponse> {
+    const params = new URLSearchParams();
+    if (reason) params.set("reason", reason);
+    const res = await this.fetchImpl(`${this.baseUrl}/v1/emergency-stop/trigger${params.toString() ? "?" + params.toString() : ""}`, {
+      method: "POST",
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!res.ok) {
+      throw new Error(`Local agent triggerEmergencyStop error (${res.status}): ${await res.text()}`);
+    }
+    return res.json() as Promise<EmergencyStopResponse>;
+  }
+
+  async resumeEmergencyStop(): Promise<EmergencyStopResponse> {
+    const res = await this.fetchImpl(`${this.baseUrl}/v1/emergency-stop/resume`, {
+      method: "POST",
+      headers: this.getHeaders("application/json"),
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!res.ok) {
+      throw new Error(`Local agent resumeEmergencyStop error (${res.status}): ${await res.text()}`);
+    }
+    return res.json() as Promise<EmergencyStopResponse>;
+  }
+
+  async getEmergencyStopStatus(): Promise<EmergencyStopStatus> {
+    const res = await this.fetchImpl(`${this.baseUrl}/v1/emergency-stop/status`, {
+      method: "GET",
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!res.ok) {
+      throw new Error(`Local agent getEmergencyStopStatus error (${res.status}): ${await res.text()}`);
+    }
+    return res.json() as Promise<EmergencyStopStatus>;
   }
 }

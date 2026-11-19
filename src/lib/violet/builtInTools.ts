@@ -951,6 +951,83 @@ export function createDefaultToolRegistry(options?: {
     }
   });
 
+  // ── 21. Computer: Emergency Stop Trigger ────────────────────────────────
+  const stopTriggerManifest: VioletToolManifest = {
+    name: "computer.emergency_stop.trigger",
+    version: "1.0.0",
+    domain: "computer",
+    description: "Instantly halt desktop interaction, release all held inputs, and lock down automated actions",
+    inputSchema: {
+      type: "object",
+      properties: {
+        reason: { type: "string" },
+      },
+    },
+    outputSchema: { type: "object" },
+    requiredScopes: ["computer:system:control"],
+    risk: "read_only",
+    platforms: ["windows"],
+    timeoutMs: 5000,
+    supportsIdempotency: true,
+    enabled: true,
+  };
+  registry.register(stopTriggerManifest, async (args, context) => {
+    const client = resolveAgentClient(agentClient, context);
+    try {
+      const result = await client.triggerEmergencyStop(args.reason ? String(args.reason) : undefined);
+      return {
+        status: "succeeded",
+        data: result,
+        evidence: [{ type: "text", reference: `emergency_stop:triggered` }],
+        summary: result.message,
+        recoverable: false,
+      };
+    } catch (err) {
+      return {
+        status: "failed",
+        summary: err instanceof Error ? err.message : "Failed to trigger emergency stop",
+        recoverable: true,
+        evidence: [],
+      };
+    }
+  });
+
+  // ── 22. Computer: Emergency Stop Resume ─────────────────────────────────
+  const stopResumeManifest: VioletToolManifest = {
+    name: "computer.emergency_stop.resume",
+    version: "1.0.0",
+    domain: "computer",
+    description: "Clear emergency stop and restore normal desktop automation operation",
+    inputSchema: { type: "object" },
+    outputSchema: { type: "object" },
+    requiredScopes: ["computer:system:control"],
+    risk: "reversible",
+    platforms: ["windows"],
+    timeoutMs: 5000,
+    supportsIdempotency: true,
+    enabled: true,
+  };
+  registry.register(stopResumeManifest, async (_args, context) => {
+    const client = resolveAgentClient(agentClient, context);
+    try {
+      const result = await client.resumeEmergencyStop();
+      return {
+        status: "succeeded",
+        data: result,
+        evidence: [{ type: "text", reference: `emergency_stop:resumed` }],
+        summary: result.message,
+        recoverable: false,
+      };
+    } catch (err) {
+      return {
+        status: "failed",
+        summary: err instanceof Error ? err.message : "Failed to resume from emergency stop",
+        recoverable: true,
+        evidence: [],
+      };
+    }
+  });
+
   return registry;
 }
 

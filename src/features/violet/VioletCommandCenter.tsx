@@ -4,13 +4,16 @@ import {
   AlertTriangle,
   Bot,
   Brain,
+  Camera,
   Check,
   Clock,
   Code2,
   Cpu,
   Globe,
+  Layers,
   MessageSquare,
   Monitor,
+  MousePointer,
   Play,
   RefreshCw,
   Shield,
@@ -28,12 +31,19 @@ import type {
   VioletTaskEvent,
 } from "../../types/violet";
 import { createDefaultToolRegistry } from "../../lib/violet/builtInTools";
-import { VioletLocalAgentClient, type LocalAgentCapabilities } from "../../lib/violet/localAgentClient";
+import {
+  VioletLocalAgentClient,
+  type LocalAgentCapabilities,
+  type ProcessEntry,
+  type ScreenCaptureResult,
+  type UIElementEntry,
+  type WindowInfoEntry,
+} from "../../lib/violet/localAgentClient";
 import { VioletTaskOrchestrator } from "../../lib/violet/taskOrchestrator";
 import { violetService } from "../../lib/violet/violetService";
 
 export function VioletCommandCenter() {
-  const [activeTab, setActiveTab] = useState<"overview" | "tasks" | "tools" | "agent" | "audit">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "tasks" | "desktop" | "tools" | "agent" | "audit">("overview");
   const [goalInput, setGoalInput] = useState("");
   const [isExecuting, setIsExecuting] = useState(false);
   const [tasks, setTasks] = useState<VioletTask[]>([]);
@@ -41,6 +51,24 @@ export function VioletCommandCenter() {
   const [approvals, setApprovals] = useState<VioletApprovalRequest[]>([]);
   const [handoffs, setHandoffs] = useState<VioletHumanHandoff[]>([]);
   const [auditEvents, setAuditEvents] = useState<VioletTaskEvent[]>([]);
+
+  // Emergency stop state
+  const [emergencyStopped, setEmergencyStopped] = useState(false);
+  const [emergencyReason, setEmergencyReason] = useState<string | null>(null);
+
+  // Live desktop & windows state
+  const [screenshot, setScreenshot] = useState<ScreenCaptureResult | null>(null);
+  const [capturingScreen, setCapturingScreen] = useState(false);
+  const [windowsList, setWindowsList] = useState<WindowInfoEntry[]>([]);
+  const [loadingWindows, setLoadingWindows] = useState(false);
+  const [selectedWindowHandle, setSelectedWindowHandle] = useState<number | null>(null);
+  const [windowElements, setWindowElements] = useState<UIElementEntry[]>([]);
+  const [inspectingUI, setInspectingUI] = useState(false);
+  const [processesList, setProcessesList] = useState<ProcessEntry[]>([]);
+  const [loadingProcesses, setLoadingProcesses] = useState(false);
+  const [processFilter, setProcessFilter] = useState("");
+  const [inputTestText, setInputTestText] = useState("");
+  const [inputTestCoords, setInputTestCoords] = useState<{ x: number; y: number }>({ x: 500, y: 500 });
 
   // Local Agent status
   const [agentHealth, setAgentHealth] = useState<{
@@ -110,6 +138,120 @@ export function VioletCommandCenter() {
         error: health.error || "Local agent service is offline on 127.0.0.1:8765",
       });
       setAgentCapabilities(null);
+    }
+  };
+
+  const handleTriggerEmergencyStop = async () => {
+    try {
+      const res = await localAgentClient.triggerEmergencyStop("Triggered manually from Command Center");
+      setEmergencyStopped(true);
+      setEmergencyReason(res.reason || "Manual user override");
+      // Abort any active tasks
+      for (const t of tasks) {
+        if (t.status === "running" || t.status === "awaiting_approval") {
+          const cancelled = orchestrator.cancelTask(t, "Aborted by Emergency Stop");
+          void violetService.saveTask(cancelled);
+        }
+      }
+    } catch (err) {
+      console.error("Failed to trigger emergency stop:", err);
+    }
+  };
+
+  const handleResumeEmergencyStop = async () => {
+    try {
+      await localAgentClient.resumeEmergencyStop();
+      setEmergencyStopped(false);
+      setEmergencyReason(null);
+    } catch (err) {
+      console.error("Failed to resume from emergency stop:", err);
+    }
+  };
+
+  const handleCaptureScreen = async () => {
+    setCapturingScreen(true);
+    try {
+      const res = await localAgentClient.captureScreen({ quality: 80, maxDimension: 1200 });
+      setScreenshot(res);
+    } catch (err) {
+      console.error("Failed to capture screen:", err);
+    } finally {
+      setCapturingScreen(false);
+    }
+  };
+
+  const handleListWindows = async () => {
+    setLoadingWindows(true);
+    try {
+      const res = await localAgentClient.listWindows({ includeMinimized: false });
+      setWindowsList(res.windows);
+    } catch (err) {
+      console.error("Failed to list windows:", err);
+    } finally {
+      setLoadingWindows(false);
+    }
+  };
+
+  const handleFocusWindow = async (handle: number) => {
+    try {
+      await localAgentClient.focusWindow({ handle });
+      void handleListWindows();
+    } catch (err) {
+      console.error("Failed to focus window:", err);
+    }
+  };
+
+  const handleInspectWindowUI = async (handle: number, title?: string) => {
+    setSelectedWindowHandle(handle);
+    setInspectingUI(true);
+    try {
+      const res = await localAgentClient.inspectWindowUI({ handle, title, max_depth: 3, max_elements: 50 });
+      setWindowElements(res.elements);
+    } catch (err) {
+      console.error("Failed to inspect window UI:", err);
+    } finally {
+      setInspectingUI(false);
+    }
+  };
+
+  const handleListProcesses = async () => {
+    setLoadingProcesses(true);
+    try {
+      const res = await localAgentClient.listProcesses({ limit: 40, filter_name: processFilter || undefined });
+      setProcessesList(res.processes);
+    } catch (err) {
+      console.error("Failed to list processes:", err);
+    } finally {
+      setLoadingProcesses(false);
+    }
+  };
+
+  const handleTerminateProcess = async (pid: number) => {
+    if (!window.confirm(`Are you sure you want to terminate process PID ${pid}?`)) return;
+    try {
+      await localAgentClient.terminateProcess({ pid, force: false, reason: "Terminated from Command Center" });
+      void handleListProcesses();
+    } catch (err) {
+      alert(`Failed to terminate process: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  };
+
+  const handleSendTestClick = async () => {
+    try {
+      await localAgentClient.executeMouseAction({ action: "click", x: inputTestCoords.x, y: inputTestCoords.y });
+      alert(`Clicked at (${inputTestCoords.x}, ${inputTestCoords.y})`);
+    } catch (err) {
+      alert(`Click failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  };
+
+  const handleSendTestType = async () => {
+    if (!inputTestText) return;
+    try {
+      await localAgentClient.executeKeyboardAction({ action: "type", text: inputTestText });
+      setInputTestText("");
+    } catch (err) {
+      alert(`Type failed: ${err instanceof Error ? err.message : String(err)}`);
     }
   };
 
@@ -319,9 +461,77 @@ export function VioletCommandCenter() {
                 <RefreshCw size={13} className={agentHealth.loading ? "spin" : ""} />
               </button>
             </div>
+
+            {/* Emergency Stop Button */}
+            <button
+              onClick={emergencyStopped ? handleResumeEmergencyStop : handleTriggerEmergencyStop}
+              title={emergencyStopped ? "Resume desktop automation" : "Instantly halt desktop inputs and tasks"}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                padding: "8px 16px",
+                borderRadius: 10,
+                background: emergencyStopped ? "var(--danger)" : "var(--danger-soft)",
+                color: emergencyStopped ? "#fff" : "var(--danger)",
+                fontSize: 12,
+                fontWeight: 750,
+                border: "1px solid var(--danger)",
+                cursor: "pointer",
+                boxShadow: emergencyStopped ? "0 0 12px rgba(239, 68, 68, 0.4)" : "none",
+              }}
+            >
+              <Square size={13} fill={emergencyStopped ? "#fff" : "currentColor"} />
+              <span>{emergencyStopped ? "EMERGENCY STOP ENGAGED (RESUME)" : "EMERGENCY STOP"}</span>
+            </button>
           </div>
         </div>
       </section>
+
+      {/* ── Emergency Stop Alert Banner ────────────────────────────────────── */}
+      {emergencyStopped && (
+        <section
+          style={{
+            marginBottom: 20,
+            padding: 16,
+            borderRadius: 12,
+            background: "var(--danger-soft)",
+            border: "2px solid var(--danger)",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            flexWrap: "wrap",
+            gap: 12,
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <ShieldAlert size={26} color="var(--danger)" />
+            <div>
+              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: "var(--danger)" }}>
+                EMERGENCY STOP IS ACTIVE
+              </h3>
+              <p style={{ margin: "2px 0 0", fontSize: 13, color: "var(--text-primary)" }}>
+                All desktop input and ongoing agent actions are strictly blocked. Reason: {emergencyReason || "User intervention"}.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={handleResumeEmergencyStop}
+            style={{
+              padding: "8px 18px",
+              borderRadius: 8,
+              background: "var(--success)",
+              color: "#fff",
+              border: "none",
+              fontWeight: 700,
+              fontSize: 13,
+              cursor: "pointer",
+            }}
+          >
+            Resume Operations
+          </button>
+        </section>
+      )}
 
       {/* ── Pending Approvals Banner ───────────────────────────────────────── */}
       {pendingApprovals.length > 0 && (
@@ -558,8 +768,9 @@ export function VioletCommandCenter() {
         {[
           { key: "overview", label: "Overview", icon: Bot },
           { key: "tasks", label: `Tasks & Timeline (${tasks.length})`, icon: Clock },
+          { key: "desktop", label: "Live Desktop & Windows", icon: Monitor },
           { key: "tools", label: `Tool Registry (${registeredTools.length})`, icon: Terminal },
-          { key: "agent", label: "Windows PC Agent", icon: Monitor },
+          { key: "agent", label: "Windows PC Agent", icon: Cpu },
           { key: "audit", label: `Audit Log (${auditEvents.length})`, icon: Activity },
         ].map((tab) => {
           const Icon = tab.icon;
@@ -877,6 +1088,413 @@ export function VioletCommandCenter() {
                 Select a task to view execution details.
               </div>
             )}
+          </div>
+        </section>
+      )}
+
+      {/* ── Tab: Live Desktop & Windows ───────────────────────────────────── */}
+      {activeTab === "desktop" && (
+        <section style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+          {/* Top Row: Screen Capture & Input Test Sandbox */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
+            {/* Screen Capture Card */}
+            <div className="card" style={{ padding: 20 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+                <div>
+                  <h3 style={{ fontSize: 15, fontWeight: 700, margin: 0, display: "flex", alignItems: "center", gap: 8 }}>
+                    <Camera size={16} /> Desktop Screen Observation
+                  </h3>
+                  <p style={{ color: "var(--text-muted)", fontSize: 12, margin: "2px 0 0" }}>
+                    On-demand screen frame capture with privacy consent guarantee.
+                  </p>
+                </div>
+                <button
+                  onClick={handleCaptureScreen}
+                  disabled={capturingScreen || !agentHealth.online}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                    padding: "8px 14px",
+                    borderRadius: 8,
+                    background: "var(--brand)",
+                    color: "#fff",
+                    border: "none",
+                    fontWeight: 600,
+                    fontSize: 12,
+                    cursor: capturingScreen || !agentHealth.online ? "not-allowed" : "pointer",
+                  }}
+                >
+                  <RefreshCw size={13} className={capturingScreen ? "spin" : ""} />
+                  <span>{capturingScreen ? "Capturing..." : "Capture Screen"}</span>
+                </button>
+              </div>
+
+              {screenshot && screenshot.blobUrl ? (
+                <div>
+                  <div
+                    style={{
+                      borderRadius: 8,
+                      overflow: "hidden",
+                      border: "1px solid var(--border-color)",
+                      background: "#000",
+                      maxHeight: 320,
+                      display: "flex",
+                      justifyContent: "center",
+                      alignItems: "center",
+                    }}
+                  >
+                    <img
+                      src={screenshot.blobUrl}
+                      alt="Desktop Frame"
+                      style={{ maxWidth: "100%", maxHeight: 320, objectFit: "contain" }}
+                    />
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "var(--text-muted)", marginTop: 8 }}>
+                    <span>Resolution: {screenshot.width} × {screenshot.height} px</span>
+                    <span>Size: {Math.round(screenshot.byteLength / 1024)} KB</span>
+                    <span>Captured: {screenshot.timestamp ? new Date(screenshot.timestamp).toLocaleTimeString() : "Just now"}</span>
+                  </div>
+                </div>
+              ) : (
+                <div
+                  style={{
+                    height: 200,
+                    borderRadius: 8,
+                    border: "1px dashed var(--border-color)",
+                    display: "flex",
+                    flexDirection: "column",
+                    justifyContent: "center",
+                    alignItems: "center",
+                    color: "var(--text-muted)",
+                    fontSize: 13,
+                    gap: 8,
+                  }}
+                >
+                  <Camera size={28} opacity={0.4} />
+                  <span>No screenshot captured yet. Click "Capture Screen" to observe.</span>
+                </div>
+              )}
+            </div>
+
+            {/* Input Test Sandbox Card */}
+            <div className="card" style={{ padding: 20 }}>
+              <div style={{ marginBottom: 14 }}>
+                <h3 style={{ fontSize: 15, fontWeight: 700, margin: 0, display: "flex", alignItems: "center", gap: 8 }}>
+                  <MousePointer size={16} /> Controlled Desktop Input Sandbox
+                </h3>
+                <p style={{ color: "var(--text-muted)", fontSize: 12, margin: "2px 0 0" }}>
+                  Safely trigger direct mouse actions and text input through verified coordinates.
+                </p>
+              </div>
+
+              <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                {/* Mouse Test */}
+                <div style={{ background: "var(--bg-app)", padding: 14, borderRadius: 8, border: "1px solid var(--border-color)" }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 8 }}>Mouse Move & Click</div>
+                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    <label style={{ fontSize: 12, color: "var(--text-muted)" }}>X:</label>
+                    <input
+                      type="number"
+                      value={inputTestCoords.x}
+                      onChange={(e) => setInputTestCoords((prev) => ({ ...prev, x: Number(e.target.value) }))}
+                      style={{ width: 80, padding: "6px 8px", borderRadius: 6, border: "1px solid var(--border-color)", fontSize: 12 }}
+                    />
+                    <label style={{ fontSize: 12, color: "var(--text-muted)" }}>Y:</label>
+                    <input
+                      type="number"
+                      value={inputTestCoords.y}
+                      onChange={(e) => setInputTestCoords((prev) => ({ ...prev, y: Number(e.target.value) }))}
+                      style={{ width: 80, padding: "6px 8px", borderRadius: 6, border: "1px solid var(--border-color)", fontSize: 12 }}
+                    />
+                    <button
+                      onClick={handleSendTestClick}
+                      disabled={!agentHealth.online || emergencyStopped}
+                      style={{
+                        padding: "6px 14px",
+                        borderRadius: 6,
+                        background: "var(--brand)",
+                        color: "#fff",
+                        border: "none",
+                        fontSize: 12,
+                        fontWeight: 600,
+                        cursor: "pointer",
+                      }}
+                    >
+                      Click (X, Y)
+                    </button>
+                  </div>
+                </div>
+
+                {/* Keyboard Test */}
+                <div style={{ background: "var(--bg-app)", padding: 14, borderRadius: 8, border: "1px solid var(--border-color)" }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 8 }}>Keyboard Typing</div>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <input
+                      type="text"
+                      placeholder="Text to type..."
+                      value={inputTestText}
+                      onChange={(e) => setInputTestText(e.target.value)}
+                      style={{ flex: 1, padding: "6px 10px", borderRadius: 6, border: "1px solid var(--border-color)", fontSize: 12 }}
+                    />
+                    <button
+                      onClick={handleSendTestType}
+                      disabled={!inputTestText.trim() || !agentHealth.online || emergencyStopped}
+                      style={{
+                        padding: "6px 14px",
+                        borderRadius: 6,
+                        background: "var(--brand)",
+                        color: "#fff",
+                        border: "none",
+                        fontSize: 12,
+                        fontWeight: 600,
+                        cursor: "pointer",
+                      }}
+                    >
+                      Type Text
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Middle Row: Window Discovery & Accessibility Tree */}
+          <div className="card" style={{ padding: 20 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+              <div>
+                <h3 style={{ fontSize: 15, fontWeight: 700, margin: 0, display: "flex", alignItems: "center", gap: 8 }}>
+                  <Layers size={16} /> Open Windows & UI Automation Hierarchy
+                </h3>
+                <p style={{ color: "var(--text-muted)", fontSize: 12, margin: "2px 0 0" }}>
+                  Enumerate visible Windows and inspect accessible control trees (buttons, edit controls, menus).
+                </p>
+              </div>
+              <button
+                onClick={handleListWindows}
+                disabled={loadingWindows || !agentHealth.online}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                  padding: "8px 14px",
+                  borderRadius: 8,
+                  background: "var(--brand)",
+                  color: "#fff",
+                  border: "none",
+                  fontWeight: 600,
+                  fontSize: 12,
+                  cursor: loadingWindows || !agentHealth.online ? "not-allowed" : "pointer",
+                }}
+              >
+                <RefreshCw size={13} className={loadingWindows ? "spin" : ""} />
+                <span>{loadingWindows ? "Scanning..." : "Enumerate Windows"}</span>
+              </button>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+              {/* Window List */}
+              <div style={{ maxHeight: 300, overflowY: "auto", display: "flex", flexDirection: "column", gap: 6 }}>
+                {windowsList.length === 0 ? (
+                  <div style={{ color: "var(--text-muted)", fontSize: 12, padding: 20, textAlign: "center" }}>
+                    Click "Enumerate Windows" to discover visible desktop applications.
+                  </div>
+                ) : (
+                  windowsList.map((win) => {
+                    const isSelected = selectedWindowHandle === win.handle;
+                    return (
+                      <div
+                        key={win.handle}
+                        style={{
+                          padding: "8px 12px",
+                          borderRadius: 8,
+                          background: isSelected ? "var(--brand-soft)" : "var(--bg-app)",
+                          border: isSelected ? "1px solid var(--brand)" : "1px solid var(--border-color)",
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          fontSize: 12,
+                        }}
+                      >
+                        <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, marginRight: 8 }}>
+                          <strong>{win.title || "(Untitled Window)"}</strong>
+                          <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                            PID: {win.process_id} • Proc: {win.process_name}
+                          </div>
+                        </div>
+                        <div style={{ display: "flex", gap: 6 }}>
+                          <button
+                            onClick={() => handleFocusWindow(win.handle)}
+                            style={{
+                              padding: "4px 8px",
+                              borderRadius: 4,
+                              background: "rgba(0,0,0,0.05)",
+                              border: "none",
+                              fontSize: 11,
+                              cursor: "pointer",
+                            }}
+                          >
+                            Focus
+                          </button>
+                          <button
+                            onClick={() => handleInspectWindowUI(win.handle, win.title)}
+                            style={{
+                              padding: "4px 8px",
+                              borderRadius: 4,
+                              background: "var(--brand)",
+                              color: "#fff",
+                              border: "none",
+                              fontSize: 11,
+                              cursor: "pointer",
+                            }}
+                          >
+                            Inspect UI
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+
+              {/* Inspected Elements */}
+              <div style={{ maxHeight: 300, overflowY: "auto", background: "var(--bg-app)", padding: 12, borderRadius: 8, border: "1px solid var(--border-color)" }}>
+                <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 8 }}>
+                  UI Elements {windowElements.length > 0 ? `(${windowElements.length})` : ""}
+                </div>
+                {inspectingUI ? (
+                  <div style={{ color: "var(--text-muted)", fontSize: 12, textAlign: "center", padding: 20 }}>
+                    Traversing accessibility tree...
+                  </div>
+                ) : windowElements.length === 0 ? (
+                  <div style={{ color: "var(--text-muted)", fontSize: 12, textAlign: "center", padding: 20 }}>
+                    Select "Inspect UI" on any window to examine its accessible controls.
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    {windowElements.map((el) => (
+                      <div
+                        key={el.element_id}
+                        style={{
+                          padding: "6px 8px",
+                          borderRadius: 6,
+                          background: "#fff",
+                          border: "1px solid var(--border-color)",
+                          fontSize: 11,
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                        }}
+                      >
+                        <div>
+                          <span style={{ fontWeight: 650, color: "var(--brand)" }}>[{el.control_type}]</span>{" "}
+                          <span>{el.name || el.automation_id || "(Unnamed)"}</span>
+                        </div>
+                        {el.bounds && (
+                          <span style={{ color: "var(--text-muted)", fontSize: 10 }}>
+                            {el.bounds.left},{el.bounds.top} ({el.bounds.width}×{el.bounds.height})
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Bottom Row: Running Processes */}
+          <div className="card" style={{ padding: 20 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14, flexWrap: "wrap", gap: 10 }}>
+              <div>
+                <h3 style={{ fontSize: 15, fontWeight: 700, margin: 0, display: "flex", alignItems: "center", gap: 8 }}>
+                  <Cpu size={16} /> Process Manager &amp; Resource Usage
+                </h3>
+                <p style={{ color: "var(--text-muted)", fontSize: 12, margin: "2px 0 0" }}>
+                  Monitor running processes and terminate runaway tasks with safety checks.
+                </p>
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <input
+                  type="text"
+                  placeholder="Filter by name..."
+                  value={processFilter}
+                  onChange={(e) => setProcessFilter(e.target.value)}
+                  style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid var(--border-color)", fontSize: 12, width: 140 }}
+                />
+                <button
+                  onClick={handleListProcesses}
+                  disabled={loadingProcesses || !agentHealth.online}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                    padding: "6px 14px",
+                    borderRadius: 6,
+                    background: "var(--brand)",
+                    color: "#fff",
+                    border: "none",
+                    fontWeight: 600,
+                    fontSize: 12,
+                    cursor: loadingProcesses || !agentHealth.online ? "not-allowed" : "pointer",
+                  }}
+                >
+                  <RefreshCw size={12} className={loadingProcesses ? "spin" : ""} />
+                  <span>Refresh</span>
+                </button>
+              </div>
+            </div>
+
+            <div style={{ maxHeight: 250, overflowY: "auto" }}>
+              {processesList.length === 0 ? (
+                <div style={{ color: "var(--text-muted)", fontSize: 12, padding: 20, textAlign: "center" }}>
+                  Click "Refresh" to view active processes.
+                </div>
+              ) : (
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, textAlign: "left" }}>
+                  <thead>
+                    <tr style={{ borderBottom: "1px solid var(--border-color)", color: "var(--text-muted)" }}>
+                      <th style={{ padding: "8px 10px" }}>PID</th>
+                      <th style={{ padding: "8px 10px" }}>Name</th>
+                      <th style={{ padding: "8px 10px" }}>Memory</th>
+                      <th style={{ padding: "8px 10px" }}>Status</th>
+                      <th style={{ padding: "8px 10px", textAlign: "right" }}>Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {processesList.map((proc) => (
+                      <tr key={proc.pid} style={{ borderBottom: "1px solid rgba(0,0,0,0.05)" }}>
+                        <td style={{ padding: "6px 10px", fontFamily: "monospace" }}>{proc.pid}</td>
+                        <td style={{ padding: "6px 10px", fontWeight: 600 }}>{proc.name}</td>
+                        <td style={{ padding: "6px 10px" }}>{proc.memory_mb ? `${proc.memory_mb} MB` : "N/A"}</td>
+                        <td style={{ padding: "6px 10px" }}>
+                          <span style={{ fontSize: 10, padding: "2px 6px", borderRadius: 4, background: "rgba(0,0,0,0.05)" }}>
+                            {proc.status}
+                          </span>
+                        </td>
+                        <td style={{ padding: "6px 10px", textAlign: "right" }}>
+                          <button
+                            onClick={() => handleTerminateProcess(proc.pid)}
+                            style={{
+                              padding: "3px 8px",
+                              borderRadius: 4,
+                              background: "var(--danger-soft)",
+                              color: "var(--danger)",
+                              border: "1px solid var(--danger)",
+                              fontSize: 11,
+                              fontWeight: 600,
+                              cursor: "pointer",
+                            }}
+                          >
+                            Terminate
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
           </div>
         </section>
       )}

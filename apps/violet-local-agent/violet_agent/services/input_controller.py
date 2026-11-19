@@ -13,6 +13,7 @@ from ..models.action import (
     MouseActionRequest,
 )
 from ..models.ui_element import InspectWindowUIRequest
+from .emergency_stop import EmergencyStopService
 from .screen_capture import ScreenCaptureService
 from .ui_automation import UIAutomationService
 from .window_manager import WindowManagerService
@@ -31,10 +32,12 @@ class InputControllerService:
         screen_service: ScreenCaptureService | None = None,
         window_service: WindowManagerService | None = None,
         ui_service: UIAutomationService | None = None,
+        emergency_stop: EmergencyStopService | None = None,
     ):
         self._screen_service = screen_service or ScreenCaptureService()
         self._window_service = window_service or WindowManagerService()
         self._ui_service = ui_service or UIAutomationService()
+        self._emergency_stop = emergency_stop
 
     def validate_coordinates(self, x: int | None, y: int | None) -> tuple[int, int]:
         """Validate coordinates against virtual desktop bounds."""
@@ -58,6 +61,9 @@ class InputControllerService:
 
     def execute_mouse_action(self, req: MouseActionRequest) -> InputActionResult:
         """Execute a validated mouse action."""
+        if self._emergency_stop and self._emergency_stop.is_active():
+            raise ValueError("Emergency stop is currently active. Desktop input blocked.")
+
         target_x, target_y = None, None
         if req.require_in_bounds:
             target_x, target_y = self.validate_coordinates(req.x, req.y)
@@ -120,6 +126,9 @@ class InputControllerService:
 
     def execute_keyboard_action(self, req: KeyboardActionRequest) -> InputActionResult:
         """Execute a keyboard typing, key press, or hotkey combination."""
+        if self._emergency_stop and self._emergency_stop.is_active():
+            raise ValueError("Emergency stop is currently active. Desktop input blocked.")
+
         if req.action == "type":
             if not req.text:
                 raise ValueError("Text must be provided for type action")
@@ -176,6 +185,15 @@ class InputControllerService:
 
     def click_element(self, req: ElementClickRequest) -> InputActionResult:
         """Locate an accessible UI element, focus its window, and click its center."""
+        if self._emergency_stop and self._emergency_stop.is_active():
+            return InputActionResult(
+                success=False,
+                action_type="click_element",
+                details={},
+                executed_at=datetime.now(timezone.utc).isoformat(),
+                error="Emergency stop is currently active. Operation blocked.",
+            )
+
         try:
             # 1. Focus target window if handle given
             if req.window_handle:

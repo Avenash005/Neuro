@@ -40,6 +40,7 @@ from .models.window import FocusWindowRequest, WindowInfo
 from .security import bearer_dependency, resolve_approved_path
 from .services.app_launcher import AppLauncherService
 from .services.device_pairing import DevicePairingService
+from .services.emergency_stop import EmergencyStopService
 from .services.input_controller import InputControllerService
 from .services.process_manager import ProcessManagerService
 from .services.screen_capture import ScreenCaptureService
@@ -66,10 +67,12 @@ def create_app(settings: Settings) -> FastAPI:
     screen_service = ScreenCaptureService()
     window_service = WindowManagerService()
     ui_service = UIAutomationService(window_manager=window_service)
+    emergency_stop = EmergencyStopService()
     input_service = InputControllerService(
         screen_service=screen_service,
         window_service=window_service,
         ui_service=ui_service,
+        emergency_stop=emergency_stop,
     )
     process_service = ProcessManagerService()
     launcher_service = AppLauncherService(allowed_roots=settings.allowed_roots)
@@ -111,6 +114,9 @@ def create_app(settings: Settings) -> FastAPI:
                 "pairing.verify",
                 "pairing.session",
                 "pairing.revoke",
+                "emergency_stop.trigger",
+                "emergency_stop.resume",
+                "emergency_stop.status",
             ],
             "approved_root_count": len(settings.allowed_roots),
             "named_commands": sorted(settings.commands.keys()),
@@ -379,6 +385,28 @@ def create_app(settings: Settings) -> FastAPI:
         revoked = pairing_service.revoke_session(session_token)
         audit.record("pairing.revoke", {"session_token_prefix": session_token[:12], "revoked": revoked})
         return {"revoked": revoked, "message": "Session revoked" if revoked else "Session not found"}
+
+    # ── Emergency Stop Endpoints ────────────────────────────────────────────
+
+    @app.post("/v1/emergency-stop/trigger")
+    def trigger_emergency_stop_endpoint(
+        reason: str = Query(default="Emergency stop triggered by user"),
+    ):
+        result = emergency_stop.trigger(reason=reason)
+        audit.record("emergency_stop.trigger", {"reason": reason, "is_stopped": True})
+        return result
+
+    @app.post("/v1/emergency-stop/resume")
+    def resume_emergency_stop_endpoint(
+        _authorized: bool = Depends(require_auth),
+    ):
+        result = emergency_stop.resume()
+        audit.record("emergency_stop.resume", {"is_stopped": False})
+        return result
+
+    @app.get("/v1/emergency-stop/status")
+    def get_emergency_stop_status_endpoint():
+        return emergency_stop.get_status()
 
     # ── Legacy / File Endpoints ─────────────────────────────────────────────
 
