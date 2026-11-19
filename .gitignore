@@ -19,6 +19,14 @@ dist-ssr
 *.local
 supabase/.temp/
 
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.venv/
+.pytest_cache/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

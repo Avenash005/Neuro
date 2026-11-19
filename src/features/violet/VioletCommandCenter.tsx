@@ -1,97 +1,1075 @@
+import { useEffect, useMemo, useState } from "react";
 import {
   Activity,
+  AlertTriangle,
   Bot,
   Brain,
-  CheckCircle2,
+  Check,
+  Clock,
   Code2,
+  Cpu,
   Globe,
   MessageSquare,
   Monitor,
+  Play,
+  RefreshCw,
+  Shield,
+  ShieldAlert,
   ShoppingBag,
+  Square,
+  Terminal,
   Workflow,
+  X,
 } from "lucide-react";
-
-const modules = [
-  { title: "Computer agent", detail: "Windows files, screen, apps and approved commands", icon: Monitor, phase: "Local agent foundation" },
-  { title: "Browser agent", detail: "Visible Playwright sessions with human takeover", icon: Globe, phase: "Planned" },
-  { title: "Developer agent", detail: "Repository inspection, tests, branches and pull requests", icon: Code2, phase: "Planned" },
-  { title: "Communication", detail: "Provider-approved inbox access and draft-first replies", icon: MessageSquare, phase: "Planned" },
-  { title: "Shopping", detail: "Catalog search, landed-price comparison and checkout approval", icon: ShoppingBag, phase: "Planned" },
-  { title: "Memory", detail: "Reuse Neuro's existing memories, retrieval and knowledge graph", icon: Brain, phase: "Existing Neuro foundation" },
-  { title: "Workflows", detail: "Schedules, triggers, bounded retries and reusable skills", icon: Workflow, phase: "Planned" },
-  { title: "Activity & safety", detail: "Task timeline, approvals, handoffs and audit evidence", icon: Activity, phase: "Foundation contracts added" },
-];
+import type {
+  VioletApprovalRequest,
+  VioletHumanHandoff,
+  VioletTask,
+  VioletTaskEvent,
+} from "../../types/violet";
+import { createDefaultToolRegistry } from "../../lib/violet/builtInTools";
+import { VioletLocalAgentClient, type LocalAgentCapabilities } from "../../lib/violet/localAgentClient";
+import { VioletTaskOrchestrator } from "../../lib/violet/taskOrchestrator";
+import { violetService } from "../../lib/violet/violetService";
 
 export function VioletCommandCenter() {
+  const [activeTab, setActiveTab] = useState<"overview" | "tasks" | "tools" | "agent" | "audit">("overview");
+  const [goalInput, setGoalInput] = useState("");
+  const [isExecuting, setIsExecuting] = useState(false);
+  const [tasks, setTasks] = useState<VioletTask[]>([]);
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const [approvals, setApprovals] = useState<VioletApprovalRequest[]>([]);
+  const [handoffs, setHandoffs] = useState<VioletHumanHandoff[]>([]);
+  const [auditEvents, setAuditEvents] = useState<VioletTaskEvent[]>([]);
+
+  // Local Agent status
+  const [agentHealth, setAgentHealth] = useState<{
+    online: boolean;
+    version?: string;
+    loading: boolean;
+    error?: string;
+  }>({ online: false, loading: true });
+  const [agentCapabilities, setAgentCapabilities] = useState<LocalAgentCapabilities | null>(null);
+
+  const localAgentClient = useMemo(() => new VioletLocalAgentClient(), []);
+  const toolRegistry = useMemo(() => createDefaultToolRegistry({ localAgentClient }), [localAgentClient]);
+  const orchestrator = useMemo(() => new VioletTaskOrchestrator(toolRegistry), [toolRegistry]);
+
+  // Load initial data and subscribe to updates
+  useEffect(() => {
+    let active = true;
+
+    async function loadData() {
+      const loadedTasks = await violetService.listTasks();
+      if (!active) return;
+      setTasks(loadedTasks);
+      if (loadedTasks.length > 0 && !selectedTaskId) {
+        setSelectedTaskId(loadedTasks[0].id);
+      }
+      setApprovals(violetService.listApprovals());
+      setHandoffs(violetService.listHandoffs());
+      setAuditEvents(violetService.listAuditEvents());
+    }
+
+    void loadData();
+
+    const unsubscribe = violetService.subscribe(() => {
+      if (!active) return;
+      void violetService.listTasks().then((t) => setTasks([...t]));
+      setApprovals(violetService.listApprovals());
+      setHandoffs(violetService.listHandoffs());
+      setAuditEvents(violetService.listAuditEvents());
+    });
+
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, []);
+
+  // Probe local agent health on mount
+  useEffect(() => {
+    checkAgentHealth();
+  }, [localAgentClient]);
+
+  const checkAgentHealth = async () => {
+    setAgentHealth((prev) => ({ ...prev, loading: true, error: undefined }));
+    const health = await localAgentClient.health();
+    if (health.online) {
+      setAgentHealth({ online: true, version: health.version, loading: false });
+      try {
+        const caps = await localAgentClient.getCapabilities();
+        setAgentCapabilities(caps);
+      } catch {
+        // Capabilities require token; health does not
+      }
+    } else {
+      setAgentHealth({
+        online: false,
+        loading: false,
+        error: health.error || "Local agent service is offline on 127.0.0.1:8765",
+      });
+      setAgentCapabilities(null);
+    }
+  };
+
+  const handleLaunchTask = async (textToRun?: string) => {
+    const goal = (textToRun || goalInput).trim();
+    if (!goal || isExecuting) return;
+
+    setIsExecuting(true);
+    setGoalInput("");
+
+    try {
+      const task = orchestrator.createTask({
+        userId: "local-user",
+        goal,
+        source: "desktop",
+      });
+      const planned = orchestrator.planTask(task);
+      await violetService.saveTask(planned);
+      setSelectedTaskId(planned.id);
+
+      // Execute task
+      const approvalsMap = new Map<string, VioletApprovalRequest>();
+      for (const appr of violetService.listApprovals(planned.id)) {
+        approvalsMap.set(appr.stepId, appr);
+      }
+
+      const completed = await orchestrator.executeTask(planned, {
+        userId: "local-user",
+        grantedScopes: [
+          "knowledge:read",
+          "computer:files:read",
+          "computer:files:write",
+          "computer:screen:read",
+          "computer:command:run",
+        ],
+        registry: toolRegistry,
+        approvals: approvalsMap,
+      });
+
+      await violetService.saveTask(completed);
+
+      // Check if step created approval
+      for (const step of completed.plan) {
+        if (step.status === "awaiting_approval") {
+          const appr = violetService.listApprovals(completed.id).find((a) => a.stepId === step.id);
+          if (appr) {
+            await violetService.saveApproval(appr);
+          }
+        }
+      }
+    } catch (err) {
+      console.error("Task execution failed:", err);
+    } finally {
+      setIsExecuting(false);
+    }
+  };
+
+  const handleApprove = async (approvalId: string) => {
+    const updatedApproval = await violetService.respondApproval(approvalId, true);
+    if (!updatedApproval) return;
+
+    const task = tasks.find((t) => t.id === updatedApproval.taskId);
+    if (!task) return;
+
+    // Resume execution
+    setIsExecuting(true);
+    try {
+      const approvalsMap = new Map<string, VioletApprovalRequest>();
+      approvalsMap.set(updatedApproval.stepId, updatedApproval);
+
+      const continued = await orchestrator.executeTask(task, {
+        userId: "local-user",
+        grantedScopes: [
+          "knowledge:read",
+          "computer:files:read",
+          "computer:files:write",
+          "computer:screen:read",
+          "computer:command:run",
+        ],
+        registry: toolRegistry,
+        approvals: approvalsMap,
+      });
+      await violetService.saveTask(continued);
+    } finally {
+      setIsExecuting(false);
+    }
+  };
+
+  const handleReject = async (approvalId: string) => {
+    const updatedApproval = await violetService.respondApproval(approvalId, false);
+    if (!updatedApproval) return;
+
+    const task = tasks.find((t) => t.id === updatedApproval.taskId);
+    if (!task) return;
+
+    const cancelled = orchestrator.cancelTask(task, "User rejected approval request");
+    await violetService.saveTask(cancelled);
+  };
+
+  const handleResumeHandoff = async (handoffId: string) => {
+    const updatedHandoff = await violetService.resumeHandoff(handoffId);
+    if (!updatedHandoff) return;
+
+    const task = tasks.find((t) => t.id === updatedHandoff.taskId);
+    if (!task) return;
+
+    setIsExecuting(true);
+    try {
+      const continued = await orchestrator.executeTask(task, {
+        userId: "local-user",
+        grantedScopes: [
+          "knowledge:read",
+          "computer:files:read",
+          "computer:files:write",
+          "computer:screen:read",
+          "computer:command:run",
+        ],
+        registry: toolRegistry,
+      });
+      await violetService.saveTask(continued);
+    } finally {
+      setIsExecuting(false);
+    }
+  };
+
+  const handleCancelTask = async (taskId: string) => {
+    const task = tasks.find((t) => t.id === taskId);
+    if (!task) return;
+    const cancelled = orchestrator.cancelTask(task, "Manually cancelled by user");
+    await violetService.saveTask(cancelled);
+  };
+
+  const selectedTask = tasks.find((t) => t.id === selectedTaskId) || tasks[0];
+  const pendingApprovals = approvals.filter((a) => a.status === "pending");
+  const waitingHandoffs = handoffs.filter((h) => h.status === "waiting");
+  const registeredTools = toolRegistry.list();
+
   return (
-    <main className="main-content">
-      <section className="welcome">
-        <div className="eyebrow"><span /> VIOLET OPERATING SYSTEM</div>
-        <h1>VIOLET Command Center</h1>
-        <p>One orchestrator for your knowledge, computer, browser and connected services.</p>
+    <main className="main-content" style={{ maxWidth: 1400, margin: "0 auto", padding: "24px 20px" }}>
+      {/* ── Top Header / Status Bar ────────────────────────────────────────── */}
+      <section className="welcome" style={{ marginBottom: 20 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 16 }}>
+          <div>
+            <div className="eyebrow" style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <Bot size={14} /> VIOLET PERSONAL AI OPERATING SYSTEM
+            </div>
+            <h1 style={{ fontSize: 26, fontWeight: 800, margin: "6px 0 4px" }}>VIOLET Command Center</h1>
+            <p style={{ color: "var(--text-muted)", fontSize: 14, margin: 0 }}>
+              Central orchestrator coordinating your knowledge, Windows PC, browser sessions and agents.
+            </p>
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            {/* Orchestrator Badge */}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                padding: "8px 14px",
+                borderRadius: 10,
+                background: "var(--brand-soft)",
+                color: "var(--brand)",
+                fontSize: 12,
+                fontWeight: 600,
+                border: "1px solid var(--border-color)",
+              }}
+            >
+              <Cpu size={15} />
+              <span>Core Orchestrator Active</span>
+            </div>
+
+            {/* Windows Agent Badge */}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                padding: "8px 14px",
+                borderRadius: 10,
+                background: agentHealth.online ? "var(--success-soft)" : "var(--warning-soft)",
+                color: agentHealth.online ? "var(--success)" : "var(--warning)",
+                fontSize: 12,
+                fontWeight: 600,
+                border: "1px solid var(--border-color)",
+              }}
+            >
+              <Monitor size={15} />
+              <span>
+                {agentHealth.online
+                  ? `PC Agent Online (v${agentHealth.version || "0.1.0"})`
+                  : "PC Agent Disconnected"}
+              </span>
+              <button
+                onClick={checkAgentHealth}
+                title="Probe local agent status"
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  cursor: "pointer",
+                  display: "grid",
+                  placeItems: "center",
+                  color: "inherit",
+                  padding: 2,
+                }}
+              >
+                <RefreshCw size={13} className={agentHealth.loading ? "spin" : ""} />
+              </button>
+            </div>
+          </div>
+        </div>
       </section>
 
-      <section className="dashboard-grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))" }}>
-        <article className="card" style={{ padding: 22, gridColumn: "1 / -1" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
-            <div style={{ width: 48, height: 48, borderRadius: 14, display: "grid", placeItems: "center", background: "var(--brand-soft)", color: "var(--brand)" }}>
-              <Bot size={25} />
-            </div>
-            <div style={{ flex: 1, minWidth: 180 }}>
-              <h2 style={{ fontSize: 18, fontWeight: 700 }}>Operating system foundation</h2>
-              <p style={{ color: "var(--text-muted)", fontSize: 13, marginTop: 4 }}>Architecture and local agent package are now tracked in this repository on a dedicated feature branch.</p>
-            </div>
-            <span style={{ fontSize: 12, padding: "6px 10px", borderRadius: 999, background: "var(--warning-soft)", color: "var(--warning)" }}>Local device not paired</span>
+      {/* ── Pending Approvals Banner ───────────────────────────────────────── */}
+      {pendingApprovals.length > 0 && (
+        <section
+          style={{
+            marginBottom: 20,
+            padding: 16,
+            borderRadius: 12,
+            background: "var(--warning-soft)",
+            border: "1px solid var(--warning)",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+            <ShieldAlert size={20} color="var(--warning)" />
+            <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: "var(--warning)" }}>
+              {pendingApprovals.length} Action{pendingApprovals.length === 1 ? "" : "s"} Require Your Approval
+            </h3>
           </div>
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 18 }}>
-            <div style={{ flex: 1, minWidth: 170, padding: 14, borderRadius: 12, background: "var(--bg-app)", border: "1px solid var(--border-color)" }}>
-              <div style={{ color: "var(--text-muted)", fontSize: 12 }}>Orchestrator</div>
-              <strong style={{ display: "block", marginTop: 5 }}>Architecture defined</strong>
-            </div>
-            <div style={{ flex: 1, minWidth: 170, padding: 14, borderRadius: 12, background: "var(--bg-app)", border: "1px solid var(--border-color)" }}>
-              <div style={{ color: "var(--text-muted)", fontSize: 12 }}>Windows agent</div>
-              <strong style={{ display: "block", marginTop: 5 }}>Starter package added</strong>
-            </div>
-            <div style={{ flex: 1, minWidth: 170, padding: 14, borderRadius: 12, background: "var(--bg-app)", border: "1px solid var(--border-color)" }}>
-              <div style={{ color: "var(--text-muted)", fontSize: 12 }}>Approval policy</div>
-              <strong style={{ display: "block", marginTop: 5 }}>Contracts and tests added</strong>
-            </div>
-          </div>
-        </article>
-
-        {modules.map((module) => {
-          const Icon = module.icon;
-          return (
-            <article className="card" key={module.title} style={{ padding: 18 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
-                <div style={{ width: 40, height: 40, borderRadius: 12, display: "grid", placeItems: "center", background: "var(--brand-soft)", color: "var(--brand)" }}>
-                  <Icon size={20} />
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {pendingApprovals.map((appr) => (
+              <div
+                key={appr.id}
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  background: "var(--bg-app)",
+                  padding: "12px 16px",
+                  borderRadius: 8,
+                  border: "1px solid var(--border-color)",
+                  flexWrap: "wrap",
+                  gap: 12,
+                }}
+              >
+                <div style={{ flex: 1, minWidth: 260 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <code style={{ fontSize: 13, fontWeight: 650, color: "var(--brand)" }}>{appr.operation}</code>
+                    <span style={{ fontSize: 11, color: "var(--text-muted)" }}>SHA-256: {appr.argumentsHash.slice(0, 12)}…</span>
+                  </div>
+                  <div style={{ fontSize: 13, color: "var(--text-primary)", marginTop: 4 }}>{appr.consequence}</div>
+                  <pre
+                    style={{
+                      fontSize: 11,
+                      marginTop: 6,
+                      background: "rgba(0,0,0,0.05)",
+                      padding: "4px 8px",
+                      borderRadius: 4,
+                      overflowX: "auto",
+                    }}
+                  >
+                    {JSON.stringify(appr.argumentsPreview, null, 2)}
+                  </pre>
                 </div>
-                <span style={{ fontSize: 10, padding: "5px 8px", borderRadius: 999, background: "var(--bg-app)", border: "1px solid var(--border-color)", color: "var(--text-muted)" }}>{module.phase}</span>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button
+                    onClick={() => handleApprove(appr.id)}
+                    disabled={isExecuting}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 6,
+                      padding: "8px 14px",
+                      borderRadius: 8,
+                      background: "var(--brand)",
+                      color: "#fff",
+                      border: "none",
+                      fontWeight: 600,
+                      fontSize: 12,
+                      cursor: "pointer",
+                    }}
+                  >
+                    <Check size={14} /> Approve &amp; Execute
+                  </button>
+                  <button
+                    onClick={() => handleReject(appr.id)}
+                    disabled={isExecuting}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 6,
+                      padding: "8px 14px",
+                      borderRadius: 8,
+                      background: "transparent",
+                      color: "var(--text-muted)",
+                      border: "1px solid var(--border-color)",
+                      fontWeight: 600,
+                      fontSize: 12,
+                      cursor: "pointer",
+                    }}
+                  >
+                    <X size={14} /> Reject
+                  </button>
+                </div>
               </div>
-              <h3 style={{ fontSize: 15, fontWeight: 650, marginTop: 15 }}>{module.title}</h3>
-              <p style={{ color: "var(--text-muted)", fontSize: 12, lineHeight: 1.6, marginTop: 6 }}>{module.detail}</p>
-            </article>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* ── Active Human Handoff Banner ────────────────────────────────────── */}
+      {waitingHandoffs.length > 0 && (
+        <section
+          style={{
+            marginBottom: 20,
+            padding: 16,
+            borderRadius: 12,
+            background: "rgba(59, 130, 246, 0.12)",
+            border: "1px solid rgba(59, 130, 246, 0.4)",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+            <AlertTriangle size={20} color="#3b82f6" />
+            <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: "#3b82f6" }}>
+              Human Intervention Required (Security / Takeover Challenge)
+            </h3>
+          </div>
+          {waitingHandoffs.map((h) => (
+            <div
+              key={h.id}
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                flexWrap: "wrap",
+                gap: 12,
+              }}
+            >
+              <div style={{ fontSize: 13, color: "var(--text-primary)" }}>
+                <strong>Reason:</strong> {h.reason.toUpperCase()} — {h.instructions} (Target: {h.visibleClient})
+              </div>
+              <button
+                onClick={() => handleResumeHandoff(h.id)}
+                disabled={isExecuting}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                  padding: "8px 14px",
+                  borderRadius: 8,
+                  background: "#3b82f6",
+                  color: "#fff",
+                  border: "none",
+                  fontWeight: 600,
+                  fontSize: 12,
+                  cursor: "pointer",
+                }}
+              >
+                <Check size={14} /> I Have Completed This / Resume Task
+              </button>
+            </div>
+          ))}
+        </section>
+      )}
+
+      {/* ── Goal Input & Task Launcher ─────────────────────────────────────── */}
+      <section className="card" style={{ padding: 20, marginBottom: 20 }}>
+        <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 8 }}>Launch a VIOLET Task</h2>
+        <p style={{ color: "var(--text-muted)", fontSize: 13, marginBottom: 14 }}>
+          Enter a goal. VIOLET will decompose the goal, check tool permissions, request approval if sensitive, and execute.
+        </p>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          <input
+            type="text"
+            value={goalInput}
+            onChange={(e) => setGoalInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") handleLaunchTask();
+            }}
+            placeholder="e.g. Check system health and ping the orchestrator..."
+            style={{
+              flex: 1,
+              minWidth: 280,
+              padding: "12px 16px",
+              borderRadius: 10,
+              border: "1px solid var(--border-color)",
+              background: "var(--bg-app)",
+              color: "var(--text-primary)",
+              fontSize: 14,
+            }}
+          />
+          <button
+            onClick={() => handleLaunchTask()}
+            disabled={isExecuting || !goalInput.trim()}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              padding: "12px 20px",
+              borderRadius: 10,
+              background: "var(--brand)",
+              color: "#fff",
+              border: "none",
+              fontWeight: 600,
+              fontSize: 14,
+              cursor: isExecuting ? "not-allowed" : "pointer",
+            }}
+          >
+            {isExecuting ? <RefreshCw size={16} className="spin" /> : <Play size={16} />}
+            <span>Plan &amp; Execute</span>
+          </button>
+        </div>
+
+        {/* Quick Launch Suggestions */}
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 }}>
+          <span style={{ fontSize: 12, color: "var(--text-muted)", alignSelf: "center" }}>Quick launch:</span>
+          {[
+            "Check system health and ping",
+            "Capture Windows PC screen snapshot",
+            "List files in approved workspace folder",
+            "Search knowledge memories for project architecture",
+          ].map((prompt) => (
+            <button
+              key={prompt}
+              onClick={() => handleLaunchTask(prompt)}
+              disabled={isExecuting}
+              style={{
+                fontSize: 12,
+                padding: "6px 10px",
+                borderRadius: 8,
+                background: "var(--bg-app)",
+                border: "1px solid var(--border-color)",
+                color: "var(--text-primary)",
+                cursor: "pointer",
+              }}
+            >
+              {prompt}
+            </button>
+          ))}
+        </div>
+      </section>
+
+      {/* ── Navigation Tabs ────────────────────────────────────────────────── */}
+      <div style={{ display: "flex", gap: 8, borderBottom: "1px solid var(--border-color)", marginBottom: 20 }}>
+        {[
+          { key: "overview", label: "Overview", icon: Bot },
+          { key: "tasks", label: `Tasks & Timeline (${tasks.length})`, icon: Clock },
+          { key: "tools", label: `Tool Registry (${registeredTools.length})`, icon: Terminal },
+          { key: "agent", label: "Windows PC Agent", icon: Monitor },
+          { key: "audit", label: `Audit Log (${auditEvents.length})`, icon: Activity },
+        ].map((tab) => {
+          const Icon = tab.icon;
+          const isSelected = activeTab === tab.key;
+          return (
+            <button
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key as any)}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                padding: "10px 16px",
+                border: "none",
+                background: "transparent",
+                borderBottom: isSelected ? "2px solid var(--brand)" : "2px solid transparent",
+                color: isSelected ? "var(--brand)" : "var(--text-muted)",
+                fontWeight: isSelected ? 700 : 500,
+                fontSize: 13,
+                cursor: "pointer",
+                marginBottom: -1,
+              }}
+            >
+              <Icon size={16} />
+              <span>{tab.label}</span>
+            </button>
           );
         })}
-      </section>
+      </div>
 
-      <article className="card" style={{ padding: 22, marginTop: 20 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 10 }}>
-          <CheckCircle2 size={18} color="var(--success)" />
-          <h2 style={{ fontSize: 16, fontWeight: 700 }}>Safety model</h2>
-        </div>
-        <p style={{ color: "var(--text-muted)", fontSize: 13, lineHeight: 1.7 }}>
-          VIOLET uses least-privilege tools, approved local folders, named command allowlists and explicit approval for external side effects. Browser verification challenges such as CAPTCHA, OTP and MFA pause for you to complete manually. This dashboard does not claim that integrations or device pairing are already connected.
-        </p>
-      </article>
+      {/* ── Tab: Overview ──────────────────────────────────────────────────── */}
+      {activeTab === "overview" && (
+        <section className="dashboard-grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))" }}>
+          {[
+            {
+              title: "Windows Computer Agent",
+              detail: "Screen capture, files, UIA, process control, allowlisted commands.",
+              icon: Monitor,
+              status: agentHealth.online ? "Online & Ready" : "Disconnected",
+              statusColor: agentHealth.online ? "var(--success)" : "var(--warning)",
+            },
+            {
+              title: "Browser Agent",
+              detail: "Playwright visible sessions with human takeover on CAPTCHA/MFA.",
+              icon: Globe,
+              status: "Phase 3 Foundation Ready",
+              statusColor: "var(--brand)",
+            },
+            {
+              title: "Developer Agent",
+              detail: "GitHub repository inspection, bug analysis, tests, branches, PRs.",
+              icon: Code2,
+              status: "Phase 5 Connector Ready",
+              statusColor: "var(--brand)",
+            },
+            {
+              title: "Communication Agent",
+              detail: "Official WhatsApp Cloud, Telegram, Slack, Gmail with draft-first safety.",
+              icon: MessageSquare,
+              status: "Phase 5 Architecture Ready",
+              statusColor: "var(--brand)",
+            },
+            {
+              title: "Shopping Intelligence",
+              detail: "Swiggy, Zepto, Blinkit catalog price comparison and checkout approval.",
+              icon: ShoppingBag,
+              status: "Phase 5 Architecture Ready",
+              statusColor: "var(--brand)",
+            },
+            {
+              title: "Knowledge & Memory Engine",
+              detail: "Neuro long-term memories, semantic vector search, entity graph.",
+              icon: Brain,
+              status: "Operational",
+              statusColor: "var(--success)",
+            },
+            {
+              title: "Workflows & Automation",
+              detail: "Scheduled tasks, event-driven triggers, bounded retry policies.",
+              icon: Workflow,
+              status: "Phase 6 Roadmap Ready",
+              statusColor: "var(--brand)",
+            },
+            {
+              title: "Policy & Audit Gateway",
+              detail: "Cryptographic SHA-256 argument hashes, 5-tier risk gate, secret redaction.",
+              icon: Shield,
+              status: "Operational",
+              statusColor: "var(--success)",
+            },
+          ].map((card) => {
+            const Icon = card.icon;
+            return (
+              <article className="card" key={card.title} style={{ padding: 18 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
+                  <div
+                    style={{
+                      width: 40,
+                      height: 40,
+                      borderRadius: 12,
+                      display: "grid",
+                      placeItems: "center",
+                      background: "var(--brand-soft)",
+                      color: "var(--brand)",
+                    }}
+                  >
+                    <Icon size={20} />
+                  </div>
+                  <span
+                    style={{
+                      fontSize: 11,
+                      padding: "4px 8px",
+                      borderRadius: 999,
+                      background: "var(--bg-app)",
+                      border: "1px solid var(--border-color)",
+                      color: card.statusColor,
+                      fontWeight: 600,
+                    }}
+                  >
+                    {card.status}
+                  </span>
+                </div>
+                <h3 style={{ fontSize: 15, fontWeight: 700, marginTop: 14 }}>{card.title}</h3>
+                <p style={{ color: "var(--text-muted)", fontSize: 12, lineHeight: 1.6, marginTop: 4 }}>{card.detail}</p>
+              </article>
+            );
+          })}
+        </section>
+      )}
 
-      <article className="card" style={{ padding: 22, marginTop: 16 }}>
-        <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 8 }}>Implementation documents</h2>
-        <p style={{ color: "var(--text-muted)", fontSize: 13, lineHeight: 1.7 }}>
-          See docs/VIOLET_PRODUCT_ARCHITECTURE.md for the target design and docs/VIOLET_IMPLEMENTATION_BACKLOG.md for the phased implementation checklist. The Windows agent lives in apps/violet-local-agent.
-        </p>
-      </article>
+      {/* ── Tab: Tasks & Timeline ──────────────────────────────────────────── */}
+      {activeTab === "tasks" && (
+        <section style={{ display: "grid", gridTemplateColumns: "320px 1fr", gap: 20 }}>
+          {/* Task List Sidebar */}
+          <div className="card" style={{ padding: 16 }}>
+            <h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 12 }}>Tasks ({tasks.length})</h3>
+            {tasks.length === 0 ? (
+              <div style={{ color: "var(--text-muted)", fontSize: 13, textAlign: "center", padding: 20 }}>
+                No tasks yet. Launch a task above.
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {tasks.map((t) => {
+                  const isSelected = t.id === selectedTaskId;
+                  return (
+                    <div
+                      key={t.id}
+                      onClick={() => setSelectedTaskId(t.id)}
+                      style={{
+                        padding: "10px 12px",
+                        borderRadius: 8,
+                        background: isSelected ? "var(--brand-soft)" : "var(--bg-app)",
+                        border: isSelected ? "1px solid var(--brand)" : "1px solid var(--border-color)",
+                        cursor: "pointer",
+                      }}
+                    >
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                        <span style={{ fontSize: 11, fontWeight: 650, color: "var(--text-muted)" }}>{t.id.slice(0, 12)}</span>
+                        <span
+                          style={{
+                            fontSize: 10,
+                            padding: "2px 6px",
+                            borderRadius: 6,
+                            fontWeight: 700,
+                            textTransform: "uppercase",
+                            background:
+                              t.status === "completed"
+                                ? "var(--success-soft)"
+                                : t.status === "failed"
+                                  ? "var(--danger-soft)"
+                                  : t.status === "awaiting_approval"
+                                    ? "var(--warning-soft)"
+                                    : "var(--brand-soft)",
+                            color:
+                              t.status === "completed"
+                                ? "var(--success)"
+                                : t.status === "failed"
+                                  ? "var(--danger)"
+                                  : t.status === "awaiting_approval"
+                                    ? "var(--warning)"
+                                    : "var(--brand)",
+                          }}
+                        >
+                          {t.status}
+                        </span>
+                      </div>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {t.goal}
+                      </div>
+                      <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>
+                        {t.plan.length} steps • {new Date(t.createdAt).toLocaleTimeString()}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Selected Task Details & Step Timeline */}
+          <div className="card" style={{ padding: 20 }}>
+            {selectedTask ? (
+              <div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
+                  <div>
+                    <span style={{ fontSize: 11, color: "var(--text-muted)", textTransform: "uppercase", fontWeight: 700 }}>
+                      Task Details • {selectedTask.id}
+                    </span>
+                    <h2 style={{ fontSize: 18, fontWeight: 800, marginTop: 4 }}>{selectedTask.goal}</h2>
+                    <div style={{ display: "flex", gap: 12, fontSize: 12, color: "var(--text-muted)", marginTop: 4 }}>
+                      <span>Source: {selectedTask.source}</span>
+                      <span>Created: {new Date(selectedTask.createdAt).toLocaleString()}</span>
+                      {selectedTask.completedAt && <span>Completed: {new Date(selectedTask.completedAt).toLocaleTimeString()}</span>}
+                    </div>
+                  </div>
+
+                  {selectedTask.status !== "completed" && selectedTask.status !== "failed" && selectedTask.status !== "cancelled" && (
+                    <button
+                      onClick={() => handleCancelTask(selectedTask.id)}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 6,
+                        padding: "8px 12px",
+                        borderRadius: 8,
+                        background: "var(--danger-soft)",
+                        color: "var(--danger)",
+                        border: "1px solid var(--danger)",
+                        fontSize: 12,
+                        fontWeight: 600,
+                        cursor: "pointer",
+                      }}
+                    >
+                      <Square size={13} /> Cancel Task
+                    </button>
+                  )}
+                </div>
+
+                {selectedTask.errorSummary && (
+                  <div style={{ padding: "10px 14px", borderRadius: 8, background: "var(--danger-soft)", color: "var(--danger)", fontSize: 13, marginBottom: 16 }}>
+                    <strong>Error:</strong> {selectedTask.errorSummary}
+                  </div>
+                )}
+
+                {/* Step Timeline */}
+                <h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 12 }}>Execution Plan ({selectedTask.plan.length} Steps)</h3>
+                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                  {selectedTask.plan.map((step, idx) => (
+                    <div
+                      key={step.id}
+                      style={{
+                        display: "flex",
+                        gap: 14,
+                        padding: "14px 16px",
+                        borderRadius: 10,
+                        background: "var(--bg-app)",
+                        border: "1px solid var(--border-color)",
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: 28,
+                          height: 28,
+                          borderRadius: 999,
+                          display: "grid",
+                          placeItems: "center",
+                          fontSize: 12,
+                          fontWeight: 700,
+                          background:
+                            step.status === "completed"
+                              ? "var(--success)"
+                              : step.status === "running"
+                                ? "var(--brand)"
+                                : step.status === "failed"
+                                  ? "var(--danger)"
+                                  : "var(--border-color)",
+                          color: "#fff",
+                        }}
+                      >
+                        {step.status === "completed" ? <Check size={14} /> : idx + 1}
+                      </div>
+
+                      <div style={{ flex: 1 }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                          <span style={{ fontSize: 14, fontWeight: 700 }}>{step.title}</span>
+                          <span
+                            style={{
+                              fontSize: 11,
+                              padding: "2px 8px",
+                              borderRadius: 6,
+                              fontWeight: 650,
+                              background: "rgba(0,0,0,0.06)",
+                            }}
+                          >
+                            Risk: {step.risk}
+                          </span>
+                        </div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
+                          <code style={{ fontSize: 12, color: "var(--brand)" }}>{step.toolName}</code>
+                          <span style={{ fontSize: 11, color: "var(--text-muted)" }}>Status: {step.status}</span>
+                        </div>
+
+                        {step.resultSummary && (
+                          <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 6, background: "rgba(0,0,0,0.03)", padding: "6px 10px", borderRadius: 6 }}>
+                            <strong>Result:</strong> {step.resultSummary}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div style={{ color: "var(--text-muted)", fontSize: 14, textAlign: "center", padding: 40 }}>
+                Select a task to view execution details.
+              </div>
+            )}
+          </div>
+        </section>
+      )}
+
+      {/* ── Tab: Tool Registry ─────────────────────────────────────────────── */}
+      {activeTab === "tools" && (
+        <section className="card" style={{ padding: 20 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+            <div>
+              <h2 style={{ fontSize: 16, fontWeight: 700 }}>Registered Tools ({registeredTools.length})</h2>
+              <p style={{ color: "var(--text-muted)", fontSize: 13, margin: "2px 0 0" }}>
+                Tools available to the task orchestrator and specialized sub-agents.
+              </p>
+            </div>
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 14 }}>
+            {registeredTools.map((tool) => (
+              <div
+                key={tool.name}
+                style={{
+                  padding: 16,
+                  borderRadius: 10,
+                  background: "var(--bg-app)",
+                  border: "1px solid var(--border-color)",
+                }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
+                  <code style={{ fontSize: 14, fontWeight: 750, color: "var(--brand)" }}>{tool.name}</code>
+                  <span
+                    style={{
+                      fontSize: 10,
+                      fontWeight: 700,
+                      textTransform: "uppercase",
+                      padding: "2px 6px",
+                      borderRadius: 6,
+                      background:
+                        tool.risk === "destructive" || tool.risk === "financial"
+                          ? "var(--danger-soft)"
+                          : tool.risk === "external_side_effect"
+                            ? "var(--warning-soft)"
+                            : "var(--success-soft)",
+                      color:
+                        tool.risk === "destructive" || tool.risk === "financial"
+                          ? "var(--danger)"
+                          : tool.risk === "external_side_effect"
+                            ? "var(--warning)"
+                            : "var(--success)",
+                    }}
+                  >
+                    {tool.risk}
+                  </span>
+                </div>
+                <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "0 0 10px", lineHeight: 1.5 }}>{tool.description}</p>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6, fontSize: 11, color: "var(--text-muted)" }}>
+                  <span style={{ padding: "2px 6px", borderRadius: 4, background: "rgba(0,0,0,0.05)" }}>
+                    Domain: {tool.domain}
+                  </span>
+                  <span style={{ padding: "2px 6px", borderRadius: 4, background: "rgba(0,0,0,0.05)" }}>
+                    Timeout: {tool.timeoutMs / 1000}s
+                  </span>
+                  {tool.requiredScopes.map((scope) => (
+                    <span key={scope} style={{ padding: "2px 6px", borderRadius: 4, background: "var(--brand-soft)", color: "var(--brand)" }}>
+                      {scope}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* ── Tab: Windows PC Agent ──────────────────────────────────────────── */}
+      {activeTab === "agent" && (
+        <section className="card" style={{ padding: 20 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
+            <div>
+              <h2 style={{ fontSize: 16, fontWeight: 700 }}>Windows Local Agent Service</h2>
+              <p style={{ color: "var(--text-muted)", fontSize: 13, margin: "2px 0 0" }}>
+                Runs locally on your Windows 11 PC under your user account at <code>http://127.0.0.1:8765</code>.
+              </p>
+            </div>
+            <button
+              onClick={checkAgentHealth}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                padding: "8px 14px",
+                borderRadius: 8,
+                background: "var(--brand)",
+                color: "#fff",
+                border: "none",
+                fontWeight: 600,
+                fontSize: 12,
+                cursor: "pointer",
+              }}
+            >
+              <RefreshCw size={14} className={agentHealth.loading ? "spin" : ""} /> Check Health
+            </button>
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 14, marginBottom: 20 }}>
+            <div style={{ padding: 14, borderRadius: 10, background: "var(--bg-app)", border: "1px solid var(--border-color)" }}>
+              <div style={{ fontSize: 12, color: "var(--text-muted)" }}>Agent Status</div>
+              <strong style={{ display: "block", fontSize: 16, marginTop: 4, color: agentHealth.online ? "var(--success)" : "var(--warning)" }}>
+                {agentHealth.online ? "Online (Loopback :8765)" : "Offline"}
+              </strong>
+            </div>
+
+            <div style={{ padding: 14, borderRadius: 10, background: "var(--bg-app)", border: "1px solid var(--border-color)" }}>
+              <div style={{ fontSize: 12, color: "var(--text-muted)" }}>Package Location</div>
+              <strong style={{ display: "block", fontSize: 14, marginTop: 4 }}>apps/violet-local-agent</strong>
+            </div>
+
+            <div style={{ padding: 14, borderRadius: 10, background: "var(--bg-app)", border: "1px solid var(--border-color)" }}>
+              <div style={{ fontSize: 12, color: "var(--text-muted)" }}>Security Model</div>
+              <strong style={{ display: "block", fontSize: 14, marginTop: 4 }}>Loopback only • Scoped roots</strong>
+            </div>
+          </div>
+
+          {agentCapabilities && (
+            <div style={{ marginBottom: 16 }}>
+              <h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 8 }}>
+                Discovered Capabilities ({agentCapabilities.capabilities.length})
+              </h3>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
+                {agentCapabilities.capabilities.map((c) => (
+                  <span
+                    key={c}
+                    style={{
+                      fontSize: 12,
+                      padding: "4px 8px",
+                      borderRadius: 6,
+                      background: "var(--brand-soft)",
+                      color: "var(--brand)",
+                      fontWeight: 600,
+                    }}
+                  >
+                    {c}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 8 }}>How to Start the Local Agent</h3>
+          <div style={{ background: "rgba(0,0,0,0.06)", padding: "12px 16px", borderRadius: 8, fontSize: 13, fontFamily: "monospace", marginBottom: 16 }}>
+            cd apps/violet-local-agent<br />
+            uv run uvicorn violet_agent.main:run --host 127.0.0.1 --port 8765
+          </div>
+        </section>
+      )}
+
+      {/* ── Tab: Audit Log ─────────────────────────────────────────────────── */}
+      {activeTab === "audit" && (
+        <section className="card" style={{ padding: 20 }}>
+          <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 4 }}>Audit Event Stream</h2>
+          <p style={{ color: "var(--text-muted)", fontSize: 13, marginBottom: 16 }}>
+            Every tool call, approval decision, handoff and task transition is recorded with secret redaction.
+          </p>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {auditEvents.map((evt) => (
+              <div
+                key={evt.id}
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  padding: "10px 14px",
+                  borderRadius: 8,
+                  background: "var(--bg-app)",
+                  border: "1px solid var(--border-color)",
+                  fontSize: 13,
+                  gap: 12,
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1 }}>
+                  <code style={{ fontSize: 11, padding: "2px 6px", borderRadius: 4, background: "rgba(0,0,0,0.05)", fontWeight: 700 }}>
+                    {evt.eventType}
+                  </code>
+                  <span style={{ color: "var(--text-primary)" }}>{evt.summary}</span>
+                </div>
+                <div style={{ fontSize: 11, color: "var(--text-muted)", whiteSpace: "nowrap" }}>
+                  {new Date(evt.createdAt).toLocaleTimeString()}
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
     </main>
   );
 }

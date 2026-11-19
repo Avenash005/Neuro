@@ -1,4 +1,5 @@
-import type { VioletRiskLevel, VioletToolManifest } from "../../types/violet";
+import type { VioletApprovalRequest, VioletRiskLevel, VioletToolManifest } from "../../types/violet";
+import { verifyApproval } from "./approvalManager";
 
 export type VioletDecision =
   | { allowed: true; requiresApproval: false; reason: string }
@@ -10,6 +11,9 @@ export interface VioletPolicyContext {
   grantedScopes: string[];
   verifiedApprovalForExactOperation?: boolean;
   toolEnabled?: boolean;
+  approval?: VioletApprovalRequest;
+  arguments?: Record<string, unknown>;
+  referenceTime?: Date;
 }
 
 /**
@@ -51,4 +55,36 @@ export function evaluateVioletTool(
         ? "Destructive actions require explicit approval."
         : "External side effects require explicit approval.",
   };
+}
+
+/**
+ * Async policy gate that verifies cryptographic approval hashes and expirations.
+ */
+export async function evaluateVioletToolAsync(
+  tool: VioletToolManifest,
+  context: VioletPolicyContext,
+): Promise<VioletDecision> {
+  let isVerified = context.verifiedApprovalForExactOperation ?? false;
+
+  if (!isVerified && context.approval && context.arguments) {
+    const verification = await verifyApproval(
+      context.approval,
+      context.arguments,
+      context.referenceTime ?? new Date()
+    );
+    if (verification.valid) {
+      isVerified = true;
+    } else if (context.approval.status === "rejected" || context.approval.status === "consumed") {
+      return {
+        allowed: false,
+        requiresApproval: false,
+        reason: `Approval invalid: ${verification.reason}`,
+      };
+    }
+  }
+
+  return evaluateVioletTool(tool, {
+    ...context,
+    verifiedApprovalForExactOperation: isVerified,
+  });
 }

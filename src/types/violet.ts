@@ -38,6 +38,27 @@ export type VioletToolDomain =
   | "voice"
   | "workflow";
 
+export type VioletStepStatus =
+  | "pending"
+  | "awaiting_approval"
+  | "running"
+  | "completed"
+  | "failed"
+  | "skipped";
+
+export type VioletApprovalStatus =
+  | "pending"
+  | "approved"
+  | "rejected"
+  | "expired"
+  | "consumed";
+
+export interface VioletExecutionBudget {
+  maxDurationMs: number;
+  maxToolCalls: number;
+  maxRetriesPerStep?: number;
+}
+
 export interface VioletTaskRequest {
   id: string;
   userId: string;
@@ -56,7 +77,31 @@ export interface VioletTaskStep {
   arguments: Record<string, unknown>;
   risk: VioletRiskLevel;
   expectedEvidence: string[];
-  status: "pending" | "awaiting_approval" | "running" | "completed" | "failed" | "skipped";
+  status: VioletStepStatus;
+  argumentsHash?: string;
+  argumentsPreview?: Record<string, unknown>;
+  resultSummary?: string | null;
+  evidence?: Array<{ type: "url" | "file" | "screenshot" | "text"; reference: string }>;
+  errorCode?: string | null;
+  startedAt?: string | null;
+  completedAt?: string | null;
+}
+
+export interface VioletTask {
+  id: string;
+  userId: string;
+  goal: string;
+  source: "desktop" | "web" | "mobile" | "voice" | "messaging";
+  status: VioletTaskStatus;
+  plan: VioletTaskStep[];
+  constraints: Record<string, unknown>;
+  executionBudget: VioletExecutionBudget;
+  errorCode?: string | null;
+  errorSummary?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  startedAt?: string | null;
+  completedAt?: string | null;
 }
 
 export interface VioletToolManifest {
@@ -83,24 +128,55 @@ export interface VioletToolResult<T = unknown> {
   errorCode?: string;
 }
 
+export interface VioletToolContext {
+  taskId: string;
+  stepId: string;
+  userId: string;
+  signal?: AbortSignal;
+  localAgentToken?: string;
+  localAgentUrl?: string;
+}
+
+export type VioletToolExecutor<TArgs = Record<string, unknown>, TResult = unknown> = (
+  args: TArgs,
+  context: VioletToolContext
+) => Promise<VioletToolResult<TResult>>;
+
 export interface VioletApprovalRequest {
   id: string;
   taskId: string;
   stepId: string;
   operation: string;
   consequence: string;
+  argumentsHash: string;
   argumentsPreview: Record<string, unknown>;
+  status: VioletApprovalStatus;
   expiresAt: string;
-  status: "pending" | "approved" | "rejected" | "expired";
+  decidedAt?: string | null;
+  consumedAt?: string | null;
+  createdAt: string;
 }
 
 export interface VioletHumanHandoff {
   id: string;
   taskId: string;
+  stepId?: string;
   reason: "captcha" | "otp" | "mfa" | "permission" | "consent" | "ambiguous_state" | "manual_takeover";
   instructions: string;
   visibleClient: "browser" | "desktop";
   status: "waiting" | "resumed" | "cancelled" | "timed_out";
+  createdAt: string;
+  resumedAt?: string | null;
+  expiresAt?: string | null;
+}
+
+export interface VioletTaskEvent {
+  id: string;
+  taskId: string;
+  userId: string;
+  eventType: string;
+  summary: string;
+  details: Record<string, unknown>;
   createdAt: string;
 }
 
@@ -108,7 +184,7 @@ export interface VioletPairedDevice {
   id: string;
   userId: string;
   name: string;
-  platform: "windows";
+  platform: "windows" | "macos" | "linux";
   publicKeyFingerprint: string;
   scopes: string[];
   lastSeenAt: string | null;
