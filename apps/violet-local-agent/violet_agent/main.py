@@ -3,7 +3,7 @@ from __future__ import annotations
 import io
 import subprocess
 
-from fastapi import Depends, FastAPI, HTTPException, Query
+from fastapi import Depends, FastAPI, Header, HTTPException, Query
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
@@ -16,6 +16,13 @@ from .models.action import (
     MouseActionRequest,
 )
 from .models.desktop import DesktopInfoResponse, ScreenshotRegionRequest
+from .models.device import (
+    PairingChallengeRequest,
+    PairingChallengeResponse,
+    PairingVerifyRequest,
+    PairingVerifyResponse,
+    SessionHeartbeatResponse,
+)
 from .models.grounding import (
     PostActionVerificationRequest,
     VerificationResult,
@@ -32,6 +39,7 @@ from .models.ui_element import InspectWindowUIRequest, InspectWindowUIResponse
 from .models.window import FocusWindowRequest, WindowInfo
 from .security import bearer_dependency, resolve_approved_path
 from .services.app_launcher import AppLauncherService
+from .services.device_pairing import DevicePairingService
 from .services.input_controller import InputControllerService
 from .services.process_manager import ProcessManagerService
 from .services.screen_capture import ScreenCaptureService
@@ -52,7 +60,8 @@ class NamedCommandRequest(BaseModel):
 def create_app(settings: Settings) -> FastAPI:
     app = FastAPI(title="VIOLET Local Agent", version="0.2.0")
     audit = AuditWriter(settings.audit_path)
-    require_auth = bearer_dependency(settings)
+    pairing_service = DevicePairingService(secret_key=settings.api_token)
+    require_auth = bearer_dependency(settings, pairing_service=pairing_service)
 
     screen_service = ScreenCaptureService()
     window_service = WindowManagerService()
@@ -98,10 +107,14 @@ def create_app(settings: Settings) -> FastAPI:
                 "applications.launch",
                 "grounding.elements",
                 "action.verify",
+                "pairing.challenge",
+                "pairing.verify",
+                "pairing.session",
+                "pairing.revoke",
             ],
             "approved_root_count": len(settings.allowed_roots),
             "named_commands": sorted(settings.commands.keys()),
-            "remote_pairing": False,
+            "remote_pairing": True,
             "desktop_input": True,
             "browser_control": False,
         }
@@ -327,6 +340,45 @@ def create_app(settings: Settings) -> FastAPI:
             return result
         except Exception as exc:
             raise HTTPException(status_code=500, detail=f"Action verification failed: {type(exc).__name__}: {str(exc)}") from exc
+
+    # ── Cryptographic Device Pairing Endpoints ──────────────────────────────
+
+    @app.post("/v1/pairing/challenge", response_model=PairingChallengeResponse)
+    def create_pairing_challenge_endpoint(body: PairingChallengeRequest):
+        challenge = pairing_service.create_challenge(body)
+        audit.record("pairing.challenge", {"device_id": body.device_id, "challenge_id": challenge.challenge_id})
+        return challenge
+
+    @app.post("/v1/pairing/verify", response_model=PairingVerifyResponse)
+    def verify_pairing_challenge_endpoint(body: PairingVerifyRequest):
+        result = pairing_service.verify_challenge(body)
+        audit.record("pairing.verify", {"device_id": body.device_id, "success": result.success})
+        if not result.success:
+            raise HTTPException(status_code=401, detail=result.message)
+        return result
+
+    @app.get("/v1/pairing/session", response_model=SessionHeartbeatResponse)
+    def get_pairing_session_endpoint(
+        authorization: str | None = Header(default=None),
+        session_token: str | None = Query(default=None),
+    ):
+        token = session_token
+        if not token and authorization and authorization.startswith("Bearer "):
+            token = authorization[7:].strip()
+        if not token:
+            raise HTTPException(status_code=401, detail="Session token required")
+
+        result = pairing_service.check_session(token)
+        return result
+
+    @app.post("/v1/pairing/revoke")
+    def revoke_pairing_session_endpoint(
+        session_token: str = Query(...),
+        _authorized: bool = Depends(require_auth),
+    ):
+        revoked = pairing_service.revoke_session(session_token)
+        audit.record("pairing.revoke", {"session_token_prefix": session_token[:12], "revoked": revoked})
+        return {"revoked": revoked, "message": "Session revoked" if revoked else "Session not found"}
 
     # ── Legacy / File Endpoints ─────────────────────────────────────────────
 

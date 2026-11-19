@@ -497,4 +497,72 @@ describe("VioletLocalAgentClient", () => {
       expect.objectContaining({ method: "POST" })
     );
   });
+
+  it("handles cryptographic device pairing handshake and session check", async () => {
+    const mockFetch = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          challenge_id: "chal_123",
+          nonce: "nonce_abc",
+          server_id: "violet-host-01",
+          expires_at: "2026-11-19T01:00:00Z",
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          success: true,
+          session_token: "vsession_secret_token",
+          device_id: "dev_01",
+          expires_at: "2026-11-20T01:00:00Z",
+          message: "Paired",
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          active: true,
+          device_id: "dev_01",
+          time_remaining_seconds: 86400,
+          paired_at: "2026-11-19T01:00:00Z",
+          message: "Active",
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          revoked: true,
+          message: "Session revoked",
+        }),
+      });
+
+    const client = new VioletLocalAgentClient({
+      baseUrl: "http://127.0.0.1:8765",
+      token: "test-token",
+      fetchImpl: mockFetch as unknown as typeof fetch,
+    });
+
+    const challenge = await client.requestPairingChallenge({ device_id: "dev_01" });
+    expect(challenge.challenge_id).toBe("chal_123");
+
+    const verify = await client.verifyPairingChallenge({
+      challenge_id: challenge.challenge_id,
+      device_id: "dev_01",
+      signature: "dummy_sig",
+    });
+    expect(verify.success).toBe(true);
+    expect(verify.session_token).toBe("vsession_secret_token");
+
+    const session = await client.checkPairingSession(verify.session_token!);
+    expect(session.active).toBe(true);
+
+    const revoked = await client.revokePairingSession(verify.session_token!);
+    expect(revoked.revoked).toBe(true);
+  });
 });

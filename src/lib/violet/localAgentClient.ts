@@ -250,6 +250,41 @@ export interface VerificationResult {
   verified_at: string;
 }
 
+export interface PairingChallengeRequest {
+  device_id: string;
+  device_name?: string;
+  client_info?: Record<string, unknown>;
+}
+
+export interface PairingChallengeResponse {
+  challenge_id: string;
+  nonce: string;
+  server_id: string;
+  expires_at: string;
+}
+
+export interface PairingVerifyRequest {
+  challenge_id: string;
+  device_id: string;
+  signature: string;
+}
+
+export interface PairingVerifyResponse {
+  success: boolean;
+  session_token?: string | null;
+  device_id: string;
+  expires_at: string;
+  message: string;
+}
+
+export interface SessionHeartbeatResponse {
+  active: boolean;
+  device_id?: string | null;
+  time_remaining_seconds: number;
+  paired_at?: string | null;
+  message: string;
+}
+
 export class VioletLocalAgentClient {
   private readonly baseUrl: string;
   private readonly token: string;
@@ -622,5 +657,59 @@ export class VioletLocalAgentClient {
       throw new Error(`Local agent verifyActionOutcome error (${res.status}): ${await res.text()}`);
     }
     return res.json() as Promise<VerificationResult>;
+  }
+
+  async requestPairingChallenge(request: PairingChallengeRequest): Promise<PairingChallengeResponse> {
+    const res = await this.fetchImpl(`${this.baseUrl}/v1/pairing/challenge`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(request),
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!res.ok) {
+      throw new Error(`Local agent requestPairingChallenge error (${res.status}): ${await res.text()}`);
+    }
+    return res.json() as Promise<PairingChallengeResponse>;
+  }
+
+  async verifyPairingChallenge(request: PairingVerifyRequest): Promise<PairingVerifyResponse> {
+    const res = await this.fetchImpl(`${this.baseUrl}/v1/pairing/verify`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(request),
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!res.ok) {
+      throw new Error(`Local agent verifyPairingChallenge error (${res.status}): ${await res.text()}`);
+    }
+    return res.json() as Promise<PairingVerifyResponse>;
+  }
+
+  async checkPairingSession(sessionToken?: string): Promise<SessionHeartbeatResponse> {
+    const token = sessionToken || this.token;
+    const res = await this.fetchImpl(`${this.baseUrl}/v1/pairing/session`, {
+      method: "GET",
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!res.ok) {
+      throw new Error(`Local agent checkPairingSession error (${res.status}): ${await res.text()}`);
+    }
+    return res.json() as Promise<SessionHeartbeatResponse>;
+  }
+
+  async revokePairingSession(sessionToken: string): Promise<{ revoked: boolean; message: string }> {
+    const params = new URLSearchParams({ session_token: sessionToken });
+    const res = await this.fetchImpl(`${this.baseUrl}/v1/pairing/revoke?${params.toString()}`, {
+      method: "POST",
+      headers: this.getHeaders("application/json"),
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!res.ok) {
+      throw new Error(`Local agent revokePairingSession error (${res.status}): ${await res.text()}`);
+    }
+    return res.json() as Promise<{ revoked: boolean; message: string }>;
   }
 }
