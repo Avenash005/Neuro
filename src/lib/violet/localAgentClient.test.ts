@@ -86,4 +86,111 @@ describe("VioletLocalAgentClient", () => {
     expect(result.returncode).toBe(0);
     expect(result.stdout).toBe("Python 3.14.0");
   });
+
+  it("retrieves desktop info and monitor metadata", async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        monitors: [{ index: 1, left: 0, top: 0, width: 1920, height: 1080, is_primary: true }],
+        primary_monitor: { index: 1, left: 0, top: 0, width: 1920, height: 1080, is_primary: true },
+        virtual_screen_bounds: { left: 0, top: 0, width: 1920, height: 1080 },
+        timestamp: "2026-11-19T00:00:00Z",
+      }),
+    });
+
+    const client = new VioletLocalAgentClient({
+      baseUrl: "http://127.0.0.1:8765",
+      token: "test-token",
+      fetchImpl: mockFetch as unknown as typeof fetch,
+    });
+
+    const info = await client.getDesktopInfo();
+    expect(info.monitors).toHaveLength(1);
+    expect(info.primary_monitor.width).toBe(1920);
+    expect(mockFetch).toHaveBeenCalledWith(
+      "http://127.0.0.1:8765/v1/desktop/info",
+      expect.objectContaining({ method: "GET" })
+    );
+  });
+
+  it("captures region screenshot and parses headers", async () => {
+    const fakeBlob = new Blob(["jpeg_bytes"], { type: "image/jpeg" });
+    const mockHeaders = new Headers({
+      "X-Capture-Width": "400",
+      "X-Capture-Height": "300",
+      "X-Capture-Timestamp": "2026-11-19T00:00:00Z",
+    });
+
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: mockHeaders,
+      blob: async () => fakeBlob,
+    });
+
+    const client = new VioletLocalAgentClient({
+      baseUrl: "http://127.0.0.1:8765",
+      token: "test-token",
+      fetchImpl: mockFetch as unknown as typeof fetch,
+    });
+
+    const res = await client.captureRegion({ left: 100, top: 100, width: 400, height: 300 });
+    expect(res.mimeType).toBe("image/jpeg");
+    expect(res.width).toBe(400);
+    expect(res.height).toBe(300);
+    expect(mockFetch).toHaveBeenCalledWith(
+      "http://127.0.0.1:8765/v1/desktop/screenshot/region",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ left: 100, top: 100, width: 400, height: 300 }),
+      })
+    );
+  });
+
+  it("lists open windows and focuses a target window", async () => {
+    const mockFetch = vi.fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          windows: [
+            {
+              handle: 1234,
+              title: "Notepad",
+              process_id: 5678,
+              process_name: "notepad.exe",
+              bounds: { left: 0, top: 0, width: 800, height: 600, right: 800, bottom: 600 },
+              is_minimized: false,
+              is_maximized: false,
+              is_active: false,
+            },
+          ],
+          count: 1,
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          success: true,
+          message: "Focused window",
+          window: { handle: 1234, title: "Notepad" },
+        }),
+      });
+
+    const client = new VioletLocalAgentClient({
+      baseUrl: "http://127.0.0.1:8765",
+      token: "test-token",
+      fetchImpl: mockFetch as unknown as typeof fetch,
+    });
+
+    const list = await client.listWindows();
+    expect(list.count).toBe(1);
+    expect(list.windows[0].title).toBe("Notepad");
+
+    const focus = await client.focusWindow({ title: "Notepad" });
+    expect(focus.success).toBe(true);
+    expect(focus.message).toBe("Focused window");
+  });
 });

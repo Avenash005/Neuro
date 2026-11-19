@@ -3,13 +3,17 @@ from __future__ import annotations
 import io
 import subprocess
 
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
 from .audit import AuditWriter
 from .config import Settings, load_settings
+from .models.desktop import DesktopInfoResponse, ScreenshotRegionRequest
+from .models.window import FocusWindowRequest, WindowInfo
 from .security import bearer_dependency, resolve_approved_path
+from .services.screen_capture import ScreenCaptureService
+from .services.window_manager import WindowManagerService
 
 
 class CreateTextFileRequest(BaseModel):
@@ -22,13 +26,16 @@ class NamedCommandRequest(BaseModel):
 
 
 def create_app(settings: Settings) -> FastAPI:
-    app = FastAPI(title="VIOLET Local Agent", version="0.1.0")
+    app = FastAPI(title="VIOLET Local Agent", version="0.2.0")
     audit = AuditWriter(settings.audit_path)
     require_auth = bearer_dependency(settings)
 
+    screen_service = ScreenCaptureService()
+    window_service = WindowManagerService()
+
     @app.get("/health")
     def health():
-        return {"status": "ok", "service": "violet-local-agent", "version": "0.1.0"}
+        return {"status": "ok", "service": "violet-local-agent", "version": "0.2.0"}
 
     @app.get("/v1/capabilities")
     def capabilities(_authorized: bool = Depends(require_auth)):
@@ -40,6 +47,11 @@ def create_app(settings: Settings) -> FastAPI:
                 "files.create_text",
                 "screen.capture",
                 "commands.run_named",
+                "desktop.info",
+                "desktop.screenshot",
+                "desktop.screenshot_region",
+                "windows.list",
+                "windows.focus",
             ],
             "approved_root_count": len(settings.allowed_roots),
             "named_commands": sorted(settings.commands.keys()),
@@ -47,6 +59,109 @@ def create_app(settings: Settings) -> FastAPI:
             "desktop_input": False,
             "browser_control": False,
         }
+
+    # ── Desktop & Screen Endpoints ──────────────────────────────────────────
+
+    @app.get("/v1/desktop/info", response_model=DesktopInfoResponse)
+    def get_desktop_info(_authorized: bool = Depends(require_auth)):
+        try:
+            info = screen_service.get_desktop_info()
+            audit.record("desktop.info", {"monitor_count": len(info.monitors)})
+            return info
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=f"Could not retrieve desktop info: {type(exc).__name__}: {str(exc)}") from exc
+
+    @app.get("/v1/desktop/screenshot")
+    def capture_desktop_screenshot(
+        monitor: int = Query(default=1, ge=0, le=16),
+        max_dimension: int = Query(default=1600, ge=100, le=3840),
+        quality: int = Query(default=75, ge=10, le=100),
+        _authorized: bool = Depends(require_auth),
+    ):
+        try:
+            image_data, meta = screen_service.capture_screen(
+                monitor_index=monitor,
+                max_dimension=max_dimension,
+                quality=quality,
+            )
+            audit.record("desktop.screenshot", {"monitor": monitor, "width": meta.width, "height": meta.height, "bytes": meta.byte_size})
+            return Response(
+                content=image_data,
+                media_type="image/jpeg",
+                headers={
+                    "Cache-Control": "no-store",
+                    "X-Capture-Width": str(meta.width),
+                    "X-Capture-Height": str(meta.height),
+                    "X-Capture-Timestamp": meta.timestamp,
+                },
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except Exception as exc:
+            raise HTTPException(status_code=503, detail=f"Screen capture failed: {type(exc).__name__}: {str(exc)}") from exc
+
+    @app.post("/v1/desktop/screenshot/region")
+    def capture_desktop_region(
+        region: ScreenshotRegionRequest,
+        quality: int = Query(default=80, ge=10, le=100),
+        _authorized: bool = Depends(require_auth),
+    ):
+        try:
+            image_data, meta = screen_service.capture_region(region, quality=quality)
+            audit.record(
+                "desktop.screenshot_region",
+                {"left": region.left, "top": region.top, "width": meta.width, "height": meta.height, "bytes": meta.byte_size},
+            )
+            return Response(
+                content=image_data,
+                media_type="image/jpeg",
+                headers={
+                    "Cache-Control": "no-store",
+                    "X-Capture-Width": str(meta.width),
+                    "X-Capture-Height": str(meta.height),
+                    "X-Capture-Timestamp": meta.timestamp,
+                },
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except Exception as exc:
+            raise HTTPException(status_code=503, detail=f"Region capture failed: {type(exc).__name__}: {str(exc)}") from exc
+
+    # ── Window Discovery Endpoints ──────────────────────────────────────────
+
+    @app.get("/v1/windows/list")
+    def list_windows(
+        include_minimized: bool = Query(default=True),
+        _authorized: bool = Depends(require_auth),
+    ):
+        try:
+            windows = window_service.list_windows(include_minimized=include_minimized)
+            audit.record("windows.list", {"window_count": len(windows)})
+            return {"windows": windows, "count": len(windows)}
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=f"Failed to enumerate windows: {type(exc).__name__}: {str(exc)}") from exc
+
+    @app.post("/v1/windows/focus")
+    def focus_window(
+        body: FocusWindowRequest,
+        _authorized: bool = Depends(require_auth),
+    ):
+        try:
+            success, target, message = window_service.focus_window(body)
+            audit.record("windows.focus", {"success": success, "handle": body.handle, "title": body.title, "message": message})
+            if not success:
+                raise HTTPException(status_code=404 if not target else 500, detail=message)
+            return {
+                "success": True,
+                "window": target,
+                "message": message,
+            }
+        except HTTPException:
+            raise
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=f"Failed to focus window: {type(exc).__name__}: {str(exc)}") from exc
+
+    # ── Legacy / File Endpoints ─────────────────────────────────────────────
 
     @app.get("/v1/files/list")
     def list_files(path: str, _authorized: bool = Depends(require_auth)):
@@ -105,8 +220,8 @@ def create_app(settings: Settings) -> FastAPI:
     @app.get("/v1/screen")
     def capture_screen(_authorized: bool = Depends(require_auth)):
         try:
-            import mss
             from PIL import Image
+            import mss
             with mss.mss() as capture:
                 monitor = capture.monitors[1]
                 frame = capture.grab(monitor)

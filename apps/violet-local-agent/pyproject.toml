@@ -7,7 +7,19 @@ name = "violet-local-agent"
 version = "0.1.0"
 description = "Permissioned localhost agent for VIOLET on Windows"
 requires-python = ">=3.11"
-dependencies = ["fastapi>=0.115,<1", "uvicorn[standard]>=0.30,<1", "pydantic>=2.8,<3", "python-dotenv>=1,<2", "mss>=9,<11", "Pillow>=10,<12"]
+dependencies = [
+    "fastapi>=0.115,<1",
+    "uvicorn[standard]>=0.30,<1",
+    "pydantic>=2.8,<3",
+    "python-dotenv>=1,<2",
+    "mss>=9,<11",
+    "Pillow>=10,<12",
+    "psutil>=5.9,<8",
+    "pyautogui>=0.9,<1",
+    "pywinauto>=0.6.9,<1",
+    "cryptography>=42,<51",
+    "pywin32>=306,<315"
+]
 
 [project.optional-dependencies]
 dev = ["pytest>=8,<9", "httpx>=0.27,<1"]

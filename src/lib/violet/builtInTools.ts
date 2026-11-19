@@ -294,6 +294,180 @@ export function createDefaultToolRegistry(options?: {
     }
   });
 
+  // ── 8. Computer: Desktop Info ──────────────────────────────────────────
+  const desktopInfoManifest: VioletToolManifest = {
+    name: "computer.desktop.info",
+    version: "1.0.0",
+    domain: "computer",
+    description: "Get Windows desktop display and monitor metrics",
+    inputSchema: { type: "object" },
+    outputSchema: { type: "object" },
+    requiredScopes: ["computer:screen:read"],
+    risk: "read_only",
+    platforms: ["windows"],
+    timeoutMs: 5000,
+    supportsIdempotency: true,
+    enabled: true,
+  };
+  registry.register(desktopInfoManifest, async (_args, context) => {
+    const client = resolveAgentClient(agentClient, context);
+    try {
+      const info = await client.getDesktopInfo();
+      return {
+        status: "succeeded",
+        data: info,
+        evidence: [{ type: "text", reference: `monitors:${info.monitors.length}` }],
+        summary: `Retrieved desktop info: ${info.monitors.length} monitor(s), primary ${info.primary_monitor.width}x${info.primary_monitor.height}`,
+        recoverable: false,
+      };
+    } catch (err) {
+      return {
+        status: "failed",
+        summary: err instanceof Error ? err.message : "Failed to get desktop info",
+        recoverable: true,
+        evidence: [],
+      };
+    }
+  });
+
+  // ── 9. Computer: Desktop Region Screenshot ──────────────────────────────
+  const screenshotRegionManifest: VioletToolManifest = {
+    name: "computer.desktop.screenshot_region",
+    version: "1.0.0",
+    domain: "computer",
+    description: "Capture a specific rectangular region of the Windows desktop",
+    inputSchema: {
+      type: "object",
+      properties: {
+        left: { type: "number" },
+        top: { type: "number" },
+        width: { type: "number" },
+        height: { type: "number" },
+      },
+      required: ["left", "top", "width", "height"],
+    },
+    outputSchema: { type: "object" },
+    requiredScopes: ["computer:screen:read"],
+    risk: "read_only",
+    platforms: ["windows"],
+    timeoutMs: 12000,
+    supportsIdempotency: false,
+    enabled: true,
+  };
+  registry.register(screenshotRegionManifest, async (args, context) => {
+    const client = resolveAgentClient(agentClient, context);
+    try {
+      const result = await client.captureRegion({
+        left: Number(args.left) || 0,
+        top: Number(args.top) || 0,
+        width: Number(args.width) || 400,
+        height: Number(args.height) || 300,
+      });
+      return {
+        status: "succeeded",
+        data: { mimeType: result.mimeType, byteLength: result.byteLength, blobUrl: result.blobUrl },
+        evidence: [{ type: "screenshot", reference: result.blobUrl || "screenshot:region" }],
+        summary: `Captured region (${args.left},${args.top}) ${args.width}x${args.height} (${Math.round(result.byteLength / 1024)} KB)`,
+        recoverable: false,
+      };
+    } catch (err) {
+      return {
+        status: "failed",
+        summary: err instanceof Error ? err.message : "Failed to capture region",
+        recoverable: true,
+        evidence: [],
+      };
+    }
+  });
+
+  // ── 10. Computer: Windows List ──────────────────────────────────────────
+  const windowsListManifest: VioletToolManifest = {
+    name: "computer.windows.list",
+    version: "1.0.0",
+    domain: "computer",
+    description: "List all visible top-level application windows on the desktop",
+    inputSchema: {
+      type: "object",
+      properties: { include_minimized: { type: "boolean" } },
+    },
+    outputSchema: { type: "object" },
+    requiredScopes: ["computer:windows:read"],
+    risk: "read_only",
+    platforms: ["windows"],
+    timeoutMs: 10000,
+    supportsIdempotency: true,
+    enabled: true,
+  };
+  registry.register(windowsListManifest, async (args, context) => {
+    const client = resolveAgentClient(agentClient, context);
+    try {
+      const result = await client.listWindows({
+        includeMinimized: args.include_minimized !== false,
+      });
+      return {
+        status: "succeeded",
+        data: result,
+        evidence: result.windows.slice(0, 5).map((w) => ({ type: "text" as const, reference: `hwnd:${w.handle}:${w.title}` })),
+        summary: `Discovered ${result.count} open window(s) across running applications`,
+        recoverable: false,
+      };
+    } catch (err) {
+      return {
+        status: "failed",
+        summary: err instanceof Error ? err.message : "Failed to list windows",
+        recoverable: true,
+        evidence: [],
+      };
+    }
+  });
+
+  // ── 11. Computer: Windows Focus ─────────────────────────────────────────
+  const windowsFocusManifest: VioletToolManifest = {
+    name: "computer.windows.focus",
+    version: "1.0.0",
+    domain: "computer",
+    description: "Bring a specific application window to the foreground by title or handle",
+    inputSchema: {
+      type: "object",
+      properties: {
+        handle: { type: "number" },
+        title: { type: "string" },
+        process_name: { type: "string" },
+      },
+    },
+    outputSchema: { type: "object" },
+    requiredScopes: ["computer:windows:write"],
+    risk: "reversible",
+    platforms: ["windows"],
+    timeoutMs: 10000,
+    supportsIdempotency: false,
+    enabled: true,
+  };
+  registry.register(windowsFocusManifest, async (args, context) => {
+    const client = resolveAgentClient(agentClient, context);
+    try {
+      const result = await client.focusWindow({
+        handle: args.handle !== undefined ? Number(args.handle) : undefined,
+        title: args.title ? String(args.title) : undefined,
+        process_name: args.process_name ? String(args.process_name) : undefined,
+      });
+      return {
+        status: "succeeded",
+        data: result,
+        evidence: [{ type: "text", reference: `focused:${result.window?.title || "window"}` }],
+        summary: result.message,
+        recoverable: false,
+      };
+    } catch (err) {
+      return {
+        status: "failed",
+        summary: err instanceof Error ? err.message : "Failed to focus window",
+        recoverable: true,
+        evidence: [],
+      };
+    }
+  });
+
   return registry;
 }
 
