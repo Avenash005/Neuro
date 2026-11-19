@@ -250,4 +250,88 @@ describe("VioletLocalAgentClient", () => {
       })
     );
   });
+
+  it("executes mouse actions and parses results", async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        success: true,
+        action_type: "mouse_click",
+        details: { action: "click", x: 200, y: 300, button: "left" },
+        executed_at: "2026-11-19T00:00:00Z",
+      }),
+    });
+
+    const client = new VioletLocalAgentClient({
+      baseUrl: "http://127.0.0.1:8765",
+      token: "test-token",
+      fetchImpl: mockFetch as unknown as typeof fetch,
+    });
+
+    const res = await client.executeMouseAction({ action: "click", x: 200, y: 300 });
+    expect(res.success).toBe(true);
+    expect(res.action_type).toBe("mouse_click");
+    expect(mockFetch).toHaveBeenCalledWith(
+      "http://127.0.0.1:8765/v1/input/mouse",
+      expect.objectContaining({ method: "POST" })
+    );
+  });
+
+  it("executes keyboard actions and parses results", async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        success: true,
+        action_type: "keyboard_type",
+        details: { action: "type", text_length: 5 },
+        executed_at: "2026-11-19T00:00:00Z",
+      }),
+    });
+
+    const client = new VioletLocalAgentClient({
+      baseUrl: "http://127.0.0.1:8765",
+      token: "test-token",
+      fetchImpl: mockFetch as unknown as typeof fetch,
+    });
+
+    const res = await client.executeKeyboardAction({ action: "type", text: "hello" });
+    expect(res.success).toBe(true);
+    expect(res.action_type).toBe("keyboard_type");
+    expect(mockFetch).toHaveBeenCalledWith(
+      "http://127.0.0.1:8765/v1/input/keyboard",
+      expect.objectContaining({ method: "POST" })
+    );
+  });
+
+  it("clicks UI elements by search criteria", async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        success: true,
+        action_type: "click_element",
+        details: {
+          element: { name: "Save", control_type: "Button" },
+          clicked_at: { x: 50, y: 50 },
+        },
+        executed_at: "2026-11-19T00:00:00Z",
+      }),
+    });
+
+    const client = new VioletLocalAgentClient({
+      baseUrl: "http://127.0.0.1:8765",
+      token: "test-token",
+      fetchImpl: mockFetch as unknown as typeof fetch,
+    });
+
+    const res = await client.clickElement({ element_name: "Save", control_type: "Button" });
+    expect(res.success).toBe(true);
+    expect(res.action_type).toBe("click_element");
+    expect(mockFetch).toHaveBeenCalledWith(
+      "http://127.0.0.1:8765/v1/input/click-element",
+      expect.objectContaining({ method: "POST" })
+    );
+  });
 });

@@ -107,6 +107,44 @@ export interface InspectWindowUIResponse {
   elements: UIElementEntry[];
 }
 
+export interface MouseActionRequest {
+  action: "move" | "click" | "double_click" | "right_click" | "middle_click" | "scroll" | "drag";
+  x?: number;
+  y?: number;
+  target_x?: number;
+  target_y?: number;
+  button?: "left" | "middle" | "right";
+  clicks?: number;
+  scroll_amount?: number;
+  smooth?: boolean;
+  require_in_bounds?: boolean;
+}
+
+export interface KeyboardActionRequest {
+  action: "type" | "press" | "hotkey";
+  text?: string;
+  key?: string;
+  keys?: string[];
+  interval_ms?: number;
+}
+
+export interface ElementClickRequest {
+  window_handle?: number;
+  process_id?: number;
+  automation_id?: string;
+  element_name?: string;
+  control_type?: string;
+  click_type?: "left" | "double" | "right";
+}
+
+export interface InputActionResult {
+  success: boolean;
+  action_type: string;
+  details: Record<string, unknown>;
+  executed_at: string;
+  error?: string | null;
+}
+
 export class VioletLocalAgentClient {
   private readonly baseUrl: string;
   private readonly token: string;
@@ -363,5 +401,44 @@ export class VioletLocalAgentClient {
       throw new Error(`Local agent command error (${res.status}): ${await res.text()}`);
     }
     return res.json() as Promise<CommandExecutionResult>;
+  }
+
+  async executeMouseAction(request: MouseActionRequest): Promise<InputActionResult> {
+    const res = await this.fetchImpl(`${this.baseUrl}/v1/input/mouse`, {
+      method: "POST",
+      headers: this.getHeaders("application/json"),
+      body: JSON.stringify(request),
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!res.ok) {
+      throw new Error(`Local agent mouseAction error (${res.status}): ${await res.text()}`);
+    }
+    return res.json() as Promise<InputActionResult>;
+  }
+
+  async executeKeyboardAction(request: KeyboardActionRequest): Promise<InputActionResult> {
+    const res = await this.fetchImpl(`${this.baseUrl}/v1/input/keyboard`, {
+      method: "POST",
+      headers: this.getHeaders("application/json"),
+      body: JSON.stringify(request),
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!res.ok) {
+      throw new Error(`Local agent keyboardAction error (${res.status}): ${await res.text()}`);
+    }
+    return res.json() as Promise<InputActionResult>;
+  }
+
+  async clickElement(request: ElementClickRequest): Promise<InputActionResult> {
+    const res = await this.fetchImpl(`${this.baseUrl}/v1/input/click-element`, {
+      method: "POST",
+      headers: this.getHeaders("application/json"),
+      body: JSON.stringify(request),
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!res.ok) {
+      throw new Error(`Local agent clickElement error (${res.status}): ${await res.text()}`);
+    }
+    return res.json() as Promise<InputActionResult>;
   }
 }

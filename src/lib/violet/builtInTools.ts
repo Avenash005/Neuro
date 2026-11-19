@@ -520,6 +520,180 @@ export function createDefaultToolRegistry(options?: {
     }
   });
 
+  // ── 13. Computer: Mouse Action ──────────────────────────────────────────
+  const mouseManifest: VioletToolManifest = {
+    name: "computer.mouse.action",
+    version: "1.0.0",
+    domain: "computer",
+    description: "Perform mouse actions (move, click, double click, right click, scroll, drag)",
+    inputSchema: {
+      type: "object",
+      properties: {
+        action: {
+          type: "string",
+          enum: ["move", "click", "double_click", "right_click", "middle_click", "scroll", "drag"],
+        },
+        x: { type: "number" },
+        y: { type: "number" },
+        target_x: { type: "number" },
+        target_y: { type: "number" },
+        button: { type: "string", enum: ["left", "middle", "right"] },
+        clicks: { type: "number" },
+        scroll_amount: { type: "number" },
+        smooth: { type: "boolean" },
+      },
+      required: ["action"],
+    },
+    outputSchema: { type: "object" },
+    requiredScopes: ["computer:input:mouse"],
+    risk: "reversible",
+    platforms: ["windows"],
+    timeoutMs: 10000,
+    supportsIdempotency: false,
+    enabled: true,
+  };
+  registry.register(mouseManifest, async (args, context) => {
+    const client = resolveAgentClient(agentClient, context);
+    try {
+      const result = await client.executeMouseAction({
+        action: (args.action as any) || "click",
+        x: args.x !== undefined ? Number(args.x) : undefined,
+        y: args.y !== undefined ? Number(args.y) : undefined,
+        target_x: args.target_x !== undefined ? Number(args.target_x) : undefined,
+        target_y: args.target_y !== undefined ? Number(args.target_y) : undefined,
+        button: args.button as any,
+        clicks: args.clicks !== undefined ? Number(args.clicks) : undefined,
+        scroll_amount: args.scroll_amount !== undefined ? Number(args.scroll_amount) : undefined,
+        smooth: args.smooth !== undefined ? Boolean(args.smooth) : true,
+      });
+      return {
+        status: result.success ? "succeeded" : "failed",
+        data: result,
+        evidence: [{ type: "text", reference: `mouse:${result.action_type}` }],
+        summary: result.success
+          ? `Executed mouse action: ${result.action_type}`
+          : `Mouse action failed: ${result.error || "unknown"}`,
+        recoverable: !result.success,
+      };
+    } catch (err) {
+      return {
+        status: "failed",
+        summary: err instanceof Error ? err.message : "Failed to execute mouse action",
+        recoverable: true,
+        evidence: [],
+      };
+    }
+  });
+
+  // ── 14. Computer: Keyboard Action ───────────────────────────────────────
+  const keyboardManifest: VioletToolManifest = {
+    name: "computer.keyboard.type",
+    version: "1.0.0",
+    domain: "computer",
+    description: "Type text, press specific keys, or send key combinations (hotkeys)",
+    inputSchema: {
+      type: "object",
+      properties: {
+        action: { type: "string", enum: ["type", "press", "hotkey"] },
+        text: { type: "string" },
+        key: { type: "string" },
+        keys: { type: "array", items: { type: "string" } },
+        interval_ms: { type: "number" },
+      },
+      required: ["action"],
+    },
+    outputSchema: { type: "object" },
+    requiredScopes: ["computer:input:keyboard"],
+    risk: "reversible",
+    platforms: ["windows"],
+    timeoutMs: 10000,
+    supportsIdempotency: false,
+    enabled: true,
+  };
+  registry.register(keyboardManifest, async (args, context) => {
+    const client = resolveAgentClient(agentClient, context);
+    try {
+      const result = await client.executeKeyboardAction({
+        action: (args.action as any) || "type",
+        text: args.text ? String(args.text) : undefined,
+        key: args.key ? String(args.key) : undefined,
+        keys: Array.isArray(args.keys) ? args.keys.map(String) : [],
+        interval_ms: args.interval_ms !== undefined ? Number(args.interval_ms) : undefined,
+      });
+      return {
+        status: result.success ? "succeeded" : "failed",
+        data: result,
+        evidence: [{ type: "text", reference: `keyboard:${result.action_type}` }],
+        summary: result.success
+          ? `Executed keyboard action: ${result.action_type}`
+          : `Keyboard action failed: ${result.error || "unknown"}`,
+        recoverable: !result.success,
+      };
+    } catch (err) {
+      return {
+        status: "failed",
+        summary: err instanceof Error ? err.message : "Failed to execute keyboard action",
+        recoverable: true,
+        evidence: [],
+      };
+    }
+  });
+
+  // ── 15. Computer: Click UI Element ──────────────────────────────────────
+  const clickElementManifest: VioletToolManifest = {
+    name: "computer.ui.click_element",
+    version: "1.0.0",
+    domain: "computer",
+    description: "Locate an accessible UI element, focus its parent window, and click its center",
+    inputSchema: {
+      type: "object",
+      properties: {
+        window_handle: { type: "number" },
+        process_id: { type: "number" },
+        automation_id: { type: "string" },
+        element_name: { type: "string" },
+        control_type: { type: "string" },
+        click_type: { type: "string", enum: ["left", "double", "right"] },
+      },
+    },
+    outputSchema: { type: "object" },
+    requiredScopes: ["computer:input:mouse", "computer:ui:read"],
+    risk: "reversible",
+    platforms: ["windows"],
+    timeoutMs: 15000,
+    supportsIdempotency: false,
+    enabled: true,
+  };
+  registry.register(clickElementManifest, async (args, context) => {
+    const client = resolveAgentClient(agentClient, context);
+    try {
+      const result = await client.clickElement({
+        window_handle: args.window_handle !== undefined ? Number(args.window_handle) : undefined,
+        process_id: args.process_id !== undefined ? Number(args.process_id) : undefined,
+        automation_id: args.automation_id ? String(args.automation_id) : undefined,
+        element_name: args.element_name ? String(args.element_name) : undefined,
+        control_type: args.control_type ? String(args.control_type) : undefined,
+        click_type: args.click_type as any,
+      });
+      return {
+        status: result.success ? "succeeded" : "failed",
+        data: result,
+        evidence: [{ type: "text", reference: `ui_click:${result.action_type}` }],
+        summary: result.success
+          ? `Clicked element: ${args.element_name || args.automation_id || "target"}`
+          : `Click element failed: ${result.error || "unknown"}`,
+        recoverable: !result.success,
+      };
+    } catch (err) {
+      return {
+        status: "failed",
+        summary: err instanceof Error ? err.message : "Failed to click UI element",
+        recoverable: true,
+        evidence: [],
+      };
+    }
+  });
+
   return registry;
 }
 

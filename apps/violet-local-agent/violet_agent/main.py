@@ -9,10 +9,17 @@ from pydantic import BaseModel, Field
 
 from .audit import AuditWriter
 from .config import Settings, load_settings
+from .models.action import (
+    ElementClickRequest,
+    InputActionResult,
+    KeyboardActionRequest,
+    MouseActionRequest,
+)
 from .models.desktop import DesktopInfoResponse, ScreenshotRegionRequest
 from .models.ui_element import InspectWindowUIRequest, InspectWindowUIResponse
 from .models.window import FocusWindowRequest, WindowInfo
 from .security import bearer_dependency, resolve_approved_path
+from .services.input_controller import InputControllerService
 from .services.screen_capture import ScreenCaptureService
 from .services.ui_automation import UIAutomationService
 from .services.window_manager import WindowManagerService
@@ -35,6 +42,11 @@ def create_app(settings: Settings) -> FastAPI:
     screen_service = ScreenCaptureService()
     window_service = WindowManagerService()
     ui_service = UIAutomationService(window_manager=window_service)
+    input_service = InputControllerService(
+        screen_service=screen_service,
+        window_service=window_service,
+        ui_service=ui_service,
+    )
 
     @app.get("/health")
     def health():
@@ -56,11 +68,14 @@ def create_app(settings: Settings) -> FastAPI:
                 "windows.list",
                 "windows.focus",
                 "ui.inspect",
+                "input.mouse",
+                "input.keyboard",
+                "input.click_element",
             ],
             "approved_root_count": len(settings.allowed_roots),
             "named_commands": sorted(settings.commands.keys()),
             "remote_pairing": False,
-            "desktop_input": False,
+            "desktop_input": True,
             "browser_control": False,
         }
 
@@ -180,6 +195,45 @@ def create_app(settings: Settings) -> FastAPI:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
         except Exception as exc:
             raise HTTPException(status_code=500, detail=f"Failed to inspect UI: {type(exc).__name__}: {str(exc)}") from exc
+
+    # ── Controlled Input Endpoints ──────────────────────────────────────────
+
+    @app.post("/v1/input/mouse", response_model=InputActionResult)
+    def mouse_action(
+        body: MouseActionRequest,
+        _authorized: bool = Depends(require_auth),
+    ):
+        try:
+            result = input_service.execute_mouse_action(body)
+            audit.record("input.mouse", {"action": body.action, "success": result.success})
+            return result
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=f"Mouse action failed: {type(exc).__name__}: {str(exc)}") from exc
+
+    @app.post("/v1/input/keyboard", response_model=InputActionResult)
+    def keyboard_action(
+        body: KeyboardActionRequest,
+        _authorized: bool = Depends(require_auth),
+    ):
+        try:
+            result = input_service.execute_keyboard_action(body)
+            audit.record("input.keyboard", {"action": body.action, "success": result.success})
+            return result
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=f"Keyboard action failed: {type(exc).__name__}: {str(exc)}") from exc
+
+    @app.post("/v1/input/click-element", response_model=InputActionResult)
+    def click_element_action(
+        body: ElementClickRequest,
+        _authorized: bool = Depends(require_auth),
+    ):
+        result = input_service.click_element(body)
+        audit.record("input.click_element", {"success": result.success, "details": result.details})
+        return result
 
     # ── Legacy / File Endpoints ─────────────────────────────────────────────
 

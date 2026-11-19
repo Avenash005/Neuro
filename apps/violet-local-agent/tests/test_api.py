@@ -34,7 +34,7 @@ def test_capabilities_require_authentication(tmp_path: Path):
     assert client.get("/v1/capabilities").status_code == 401
     response = client.get("/v1/capabilities", headers={"Authorization": "Bearer " + "t" * 48})
     assert response.status_code == 200
-    assert response.json()["desktop_input"] is False
+    assert response.json()["desktop_input"] is True
 
 
 def test_file_read_and_create_are_scoped_and_non_overwriting(tmp_path: Path):
