@@ -4,6 +4,7 @@ import {
   AlertTriangle,
   Bot,
   Brain,
+  Bug,
   Camera,
   Check,
   Clock,
@@ -19,6 +20,7 @@ import {
   Shield,
   ShieldAlert,
   ShoppingBag,
+  Sparkles,
   Square,
   Terminal,
   Workflow,
@@ -41,9 +43,14 @@ import {
 } from "../../lib/violet/localAgentClient";
 import { VioletTaskOrchestrator } from "../../lib/violet/taskOrchestrator";
 import { violetService } from "../../lib/violet/violetService";
+import { VioletIntelligencePanel } from "./VioletIntelligencePanel";
+import { VioletMultiAgentLab } from "./VioletMultiAgentLab";
+import { VioletLiveOperations } from "./VioletLiveOperations";
+import { VioletAgentStudio } from "./VioletAgentStudio";
+import { VioletIssuesCenter } from "./VioletIssuesCenter";
 
 export function VioletCommandCenter() {
-  const [activeTab, setActiveTab] = useState<"overview" | "tasks" | "desktop" | "tools" | "agent" | "audit">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "intelligence" | "multiagent" | "studio" | "liveops" | "issues" | "tasks" | "desktop" | "tools" | "agent" | "audit">("overview");
   const [goalInput, setGoalInput] = useState("");
   const [isExecuting, setIsExecuting] = useState(false);
   const [tasks, setTasks] = useState<VioletTask[]>([]);
@@ -767,6 +774,11 @@ export function VioletCommandCenter() {
       <div style={{ display: "flex", gap: 8, borderBottom: "1px solid var(--border-color)", marginBottom: 20 }}>
         {[
           { key: "overview", label: "Overview", icon: Bot },
+          { key: "intelligence", label: "Multi-Model Intelligence", icon: Sparkles },
+          { key: "multiagent", label: "Multi-Agent Lab", icon: Workflow },
+          { key: "studio", label: "Agent Studio", icon: Layers },
+          { key: "liveops", label: "Live Operations", icon: Activity },
+          { key: "issues", label: "Issues & Bugs", icon: Bug },
           { key: "tasks", label: `Tasks & Timeline (${tasks.length})`, icon: Clock },
           { key: "desktop", label: "Live Desktop & Windows", icon: Monitor },
           { key: "tools", label: `Tool Registry (${registeredTools.length})`, icon: Terminal },
@@ -898,6 +910,41 @@ export function VioletCommandCenter() {
               </article>
             );
           })}
+        </section>
+      )}
+
+      {/* ── Tab: Multi-Model Intelligence ──────────────────────────────────── */}
+      {activeTab === "intelligence" && (
+        <section style={{ marginBottom: 20 }}>
+          <VioletIntelligencePanel />
+        </section>
+      )}
+
+      {/* ── Tab: Multi-Agent Lab ───────────────────────────────────────────── */}
+      {activeTab === "multiagent" && (
+        <section style={{ marginBottom: 20 }}>
+          <VioletMultiAgentLab />
+        </section>
+      )}
+
+      {/* ── Tab: Agent Studio ──────────────────────────────────────────────── */}
+      {activeTab === "studio" && (
+        <section style={{ marginBottom: 20 }}>
+          <VioletAgentStudio />
+        </section>
+      )}
+
+      {/* ── Tab: Live Operations ───────────────────────────────────────────── */}
+      {activeTab === "liveops" && (
+        <section style={{ marginBottom: 20 }}>
+          <VioletLiveOperations onNavigateToIssues={() => setActiveTab("issues")} />
+        </section>
+      )}
+
+      {/* ── Tab: Issues & Bugs Center ───────────────────────────────────────── */}
+      {activeTab === "issues" && (
+        <section style={{ marginBottom: 20 }}>
+          <VioletIssuesCenter onNavigateToLiveOps={() => setActiveTab("liveops")} />
         </section>
       )}
 

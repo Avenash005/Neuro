@@ -25,6 +25,7 @@ import {
   Globe,
   Bot,
   Activity,
+  Bug,
 } from "lucide-react";
 import type { BackendStatus, View } from "../../types/app";
 
@@ -72,6 +73,8 @@ export function Sidebar({
     { label: "Home" as View, displayLabel: "Dashboard", icon: Home },
     { label: "Sidekick" as View, displayLabel: "AI Chat", icon: Sparkles },
     { label: "Violet" as View, displayLabel: "VIOLET AI", icon: Bot },
+    { label: "LiveOperations" as View, displayLabel: "Live Operations", icon: Activity },
+    { label: "Issues" as View, displayLabel: "Issues & Bugs", icon: Bug },
     { label: "Library" as View, displayLabel: "Memories", icon: Layers3 },
     { label: "Tasks" as View, displayLabel: "Tasks", icon: ListTodo },
     { label: "Study" as View, displayLabel: "Study", icon: GraduationCap },

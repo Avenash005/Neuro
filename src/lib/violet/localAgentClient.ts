@@ -65,6 +65,7 @@ export interface WindowInfoEntry {
   title: string;
   process_id: number;
   process_name: string;
+  class_name?: string;
   bounds: WindowBoundsEntry;
   is_minimized: boolean;
   is_maximized: boolean;
@@ -226,14 +227,21 @@ export interface VisualGroundingResponse {
 
 export interface VerificationCondition {
   check_type: "window_exists" | "window_title_contains" | "element_visible" | "dialog_opened";
+  window_handle?: number;
+  window_title?: string;
   expected_title?: string;
   expected_element_name?: string;
   expected_automation_id?: string;
+  control_type?: string;
+  max_depth?: number;
+  max_elements?: number;
   timeout_seconds?: number;
 }
 
 export interface PostActionVerificationRequest {
   action_type: string;
+  target_window_handle?: number;
+  target_window_title?: string;
   conditions: VerificationCondition[];
   capture_screenshot_evidence?: boolean;
 }
@@ -246,6 +254,13 @@ export interface VerificationResult {
     passed: boolean;
     message: string;
   }>;
+  screenshot_evidence?: {
+    timestamp: string;
+    width: number;
+    height: number;
+    byte_size: number;
+    format: string;
+  } | null;
   evidence_summary: string;
   verified_at: string;
 }

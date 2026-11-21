@@ -900,15 +900,22 @@ export function createDefaultToolRegistry(options?: {
       type: "object",
       properties: {
         action_type: { type: "string" },
+        target_window_handle: { type: "number" },
+        target_window_title: { type: "string" },
         conditions: {
           type: "array",
           items: {
             type: "object",
             properties: {
               check_type: { type: "string" },
+              window_handle: { type: "number" },
+              window_title: { type: "string" },
               expected_title: { type: "string" },
               expected_element_name: { type: "string" },
               expected_automation_id: { type: "string" },
+              control_type: { type: "string" },
+              max_depth: { type: "number" },
+              max_elements: { type: "number" },
               timeout_seconds: { type: "number" },
             },
             required: ["check_type"],
@@ -931,6 +938,8 @@ export function createDefaultToolRegistry(options?: {
     try {
       const result = await client.verifyActionOutcome({
         action_type: String(args.action_type),
+        target_window_handle: args.target_window_handle !== undefined ? Number(args.target_window_handle) : undefined,
+        target_window_title: args.target_window_title ? String(args.target_window_title) : undefined,
         conditions: (args.conditions as any[]) || [],
         capture_screenshot_evidence: args.capture_screenshot_evidence !== undefined ? Boolean(args.capture_screenshot_evidence) : true,
       });

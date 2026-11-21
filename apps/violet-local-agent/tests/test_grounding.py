@@ -92,3 +92,52 @@ def test_verify_action_outcome_failure(test_client):
     data = res.json()
     assert data["verified"] is False
     assert "FAILED" in data["evidence_summary"]
+
+
+def test_verify_action_element_visible_regression(test_client):
+    headers = {"Authorization": "Bearer " + "t" * 48}
+    # Test positive element_visible in mock inspected window
+    res = test_client.post(
+        "/v1/verification/verify",
+        headers=headers,
+        json={
+            "action_type": "click_element",
+            "target_window_title": "Mock Window",
+            "conditions": [
+                {
+                    "check_type": "element_visible",
+                    "expected_element_name": "File",
+                    "control_type": "MenuItem",
+                    "timeout_seconds": 0.5,
+                }
+            ],
+            "capture_screenshot_evidence": True,
+        },
+    )
+    assert res.status_code == 200
+    data = res.json()
+    assert data["verified"] is True
+    assert "screenshot_evidence" in data
+    assert data["screenshot_evidence"] is not None
+    assert data["screenshot_evidence"]["captured"] is True
+    assert "file_path" in data["screenshot_evidence"]
+
+    # Test conjoint mismatch: automation_id matches but expected_element_name does not
+    res_mismatch = test_client.post(
+        "/v1/verification/verify",
+        headers=headers,
+        json={
+            "action_type": "click_element",
+            "target_window_title": "Mock Window",
+            "conditions": [
+                {
+                    "check_type": "element_visible",
+                    "expected_element_name": "CompletelyWrongNameThatDoesNotMatch",
+                    "expected_automation_id": "menu_file",
+                    "timeout_seconds": 0.3,
+                }
+            ],
+        },
+    )
+    assert res_mismatch.status_code == 200
+    assert res_mismatch.json()["verified"] is False

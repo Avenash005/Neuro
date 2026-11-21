@@ -34,14 +34,21 @@ class VerificationCondition(BaseModel):
         "element_visible",
         "dialog_opened",
     ]
+    window_handle: Optional[int] = None
+    window_title: Optional[str] = None
     expected_title: Optional[str] = None
     expected_element_name: Optional[str] = None
     expected_automation_id: Optional[str] = None
+    control_type: Optional[str] = None
+    max_depth: Optional[int] = Field(default=8, ge=1, le=20)
+    max_elements: Optional[int] = Field(default=250, ge=10, le=1000)
     timeout_seconds: float = Field(default=3.0, ge=0.1, le=30.0)
 
 
 class PostActionVerificationRequest(BaseModel):
     action_type: str
+    target_window_handle: Optional[int] = None
+    target_window_title: Optional[str] = None
     conditions: List[VerificationCondition]
     capture_screenshot_evidence: bool = True
 
@@ -50,5 +57,6 @@ class VerificationResult(BaseModel):
     verified: bool
     action_type: str
     condition_results: List[dict[str, Any]]
+    screenshot_evidence: Optional[dict[str, Any]] = None
     evidence_summary: str
     verified_at: str

@@ -9,6 +9,7 @@ from ..models.ui_element import (
     UIElement,
     UIElementBounds,
 )
+from .desktop_utils import run_in_desktop
 from .window_manager import WindowManagerService
 
 try:
@@ -23,21 +24,23 @@ class UIAutomationService:
         self.window_manager = window_manager or WindowManagerService()
 
     def inspect_window_ui(self, request: InspectWindowUIRequest) -> InspectWindowUIResponse:
+        return run_in_desktop(self._inspect_window_ui_impl, request)
+
+    def _inspect_window_ui_impl(self, request: InspectWindowUIRequest) -> InspectWindowUIResponse:
         target = None
         if request.handle or request.title:
             from ..models.window import FocusWindowRequest
             target = self.window_manager.find_window(
                 FocusWindowRequest(handle=request.handle, title=request.title)
             )
-
-        if not target:
-            # Fall back to foreground window
+        else:
+            # Fall back to foreground window only when no specific window was requested
             windows = self.window_manager.list_windows()
             active_windows = [w for w in windows if w.is_active]
             target = active_windows[0] if active_windows else (windows[0] if windows else None)
 
         if not target:
-            return self._mock_inspect("Desktop Workspace", 0, 0)
+            return self._mock_inspect(request.title or "Desktop Workspace", request.handle or 0, 0)
 
         if not HAS_PYWINAUTO or sys.platform != "win32":
             return self._mock_inspect(target.title, target.handle, target.process_id)

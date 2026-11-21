@@ -5,6 +5,7 @@ from typing import List, Optional
 import psutil
 
 from ..models.window import FocusWindowRequest, WindowBounds, WindowInfo
+from .desktop_utils import run_in_desktop
 
 try:
     import win32con
@@ -20,72 +21,80 @@ class WindowManagerService:
         if not HAS_WIN32 or sys.platform != "win32":
             return self._mock_windows()
 
-        windows: List[WindowInfo] = []
-        foreground_hwnd = win32gui.GetForegroundWindow()
+        def _enum() -> List[WindowInfo]:
+            windows: List[WindowInfo] = []
+            foreground_hwnd = win32gui.GetForegroundWindow()
 
-        def enum_callback(hwnd: int, _lparam: int):
-            if not win32gui.IsWindowVisible(hwnd):
-                return True
+            def enum_callback(hwnd: int, _lparam: int):
+                if not win32gui.IsWindowVisible(hwnd):
+                    return True
 
-            title = win32gui.GetWindowText(hwnd).strip()
-            if not title:
-                return True
+                title = win32gui.GetWindowText(hwnd).strip()
+                if not title:
+                    return True
 
-            rect = win32gui.GetWindowRect(hwnd)
-            left, top, right, bottom = rect
-            width = right - left
-            height = bottom - top
+                rect = win32gui.GetWindowRect(hwnd)
+                left, top, right, bottom = rect
+                width = right - left
+                height = bottom - top
 
-            # Filter zero-sized or off-screen hidden overlays
-            if width <= 0 or height <= 0:
-                return True
+                # Filter zero-sized or off-screen hidden overlays
+                if width <= 0 or height <= 0:
+                    return True
 
-            is_minimized = bool(win32gui.IsIconic(hwnd))
-            if not include_minimized and is_minimized:
-                return True
+                is_minimized = bool(win32gui.IsIconic(hwnd))
+                if not include_minimized and is_minimized:
+                    return True
 
-            is_maximized = False
-            try:
-                placement = win32gui.GetWindowPlacement(hwnd)
-                is_maximized = placement[1] == win32con.SW_SHOWMAXIMIZED
-            except Exception:
-                pass
+                is_maximized = False
+                try:
+                    placement = win32gui.GetWindowPlacement(hwnd)
+                    is_maximized = placement[1] == win32con.SW_SHOWMAXIMIZED
+                except Exception:
+                    pass
 
-            pid = 0
-            proc_name = "unknown"
-            try:
-                _, pid = win32process.GetWindowThreadProcessId(hwnd)
-                if pid > 0:
-                    proc = psutil.Process(pid)
-                    proc_name = proc.name()
-            except Exception:
-                pass
+                pid = 0
+                proc_name = "unknown"
+                cls_name = ""
+                try:
+                    cls_name = win32gui.GetClassName(hwnd)
+                except Exception:
+                    pass
+                try:
+                    _, pid = win32process.GetWindowThreadProcessId(hwnd)
+                    if pid > 0:
+                        proc = psutil.Process(pid)
+                        proc_name = proc.name()
+                except Exception:
+                    pass
 
-            windows.append(
-                WindowInfo(
-                    handle=hwnd,
-                    title=title,
-                    process_id=pid,
-                    process_name=proc_name,
-                    bounds=WindowBounds(
-                        left=left,
-                        top=top,
-                        width=width,
-                        height=height,
-                        right=right,
-                        bottom=bottom,
-                    ),
-                    is_minimized=is_minimized,
-                    is_maximized=is_maximized,
-                    is_active=(hwnd == foreground_hwnd),
+                windows.append(
+                    WindowInfo(
+                        handle=hwnd,
+                        title=title,
+                        process_id=pid,
+                        process_name=proc_name,
+                        class_name=cls_name,
+                        bounds=WindowBounds(
+                            left=left,
+                            top=top,
+                            width=width,
+                            height=height,
+                            right=right,
+                            bottom=bottom,
+                        ),
+                        is_minimized=is_minimized,
+                        is_maximized=is_maximized,
+                        is_active=(hwnd == foreground_hwnd),
+                    )
                 )
-            )
-            return True
+                return True
 
-        win32gui.EnumWindows(enum_callback, 0)
-        # Sort active first, then alphabetically by title
-        windows.sort(key=lambda w: (not w.is_active, w.title.casefold()))
-        return windows
+            win32gui.EnumWindows(enum_callback, 0)
+            windows.sort(key=lambda w: (not w.is_active, w.title.casefold()))
+            return windows
+
+        return run_in_desktop(_enum)
 
     def find_window(self, request: FocusWindowRequest) -> Optional[WindowInfo]:
         windows = self.list_windows(include_minimized=True)
@@ -117,16 +126,31 @@ class WindowManagerService:
         if not HAS_WIN32 or sys.platform != "win32":
             return True, target, f"Focused mock window '{target.title}'"
 
-        try:
-            hwnd = target.handle
-            if target.is_minimized:
-                win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
+        def _focus() -> tuple[bool, Optional[WindowInfo], str]:
+            try:
+                hwnd = target.handle
+                if target.is_minimized:
+                    win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
+                else:
+                    win32gui.ShowWindow(hwnd, win32con.SW_SHOW)
 
-            # Bring to front
-            win32gui.SetForegroundWindow(hwnd)
-            return True, target, f"Successfully focused window '{target.title}' (HWND {hwnd})"
-        except Exception as exc:
-            return False, target, f"Failed to focus window: {type(exc).__name__}: {str(exc)}"
+                # Bring to front
+                try:
+                    win32gui.SetForegroundWindow(hwnd)
+                except Exception:
+                    try:
+                        import win32api
+                        win32api.keybd_event(win32con.VK_MENU, 0, 0, 0)
+                        win32api.keybd_event(win32con.VK_MENU, 0, win32con.KEYEVENTF_KEYUP, 0)
+                        win32gui.SetForegroundWindow(hwnd)
+                    except Exception:
+                        win32gui.BringWindowToTop(hwnd)
+
+                return True, target, f"Successfully focused window '{target.title}' (HWND {hwnd})"
+            except Exception as exc:
+                return False, target, f"Failed to focus window: {type(exc).__name__}: {str(exc)}"
+
+        return run_in_desktop(_focus)
 
     def _mock_windows(self) -> List[WindowInfo]:
         return [

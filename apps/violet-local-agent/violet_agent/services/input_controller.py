@@ -13,6 +13,7 @@ from ..models.action import (
     MouseActionRequest,
 )
 from ..models.ui_element import InspectWindowUIRequest
+from .desktop_utils import run_in_desktop
 from .emergency_stop import EmergencyStopService
 from .screen_capture import ScreenCaptureService
 from .ui_automation import UIAutomationService
@@ -60,6 +61,9 @@ class InputControllerService:
         return x, y
 
     def execute_mouse_action(self, req: MouseActionRequest) -> InputActionResult:
+        return run_in_desktop(self._execute_mouse_action_impl, req)
+
+    def _execute_mouse_action_impl(self, req: MouseActionRequest) -> InputActionResult:
         """Execute a validated mouse action."""
         if self._emergency_stop and self._emergency_stop.is_active():
             raise ValueError("Emergency stop is currently active. Desktop input blocked.")
@@ -125,6 +129,9 @@ class InputControllerService:
             )
 
     def execute_keyboard_action(self, req: KeyboardActionRequest) -> InputActionResult:
+        return run_in_desktop(self._execute_keyboard_action_impl, req)
+
+    def _execute_keyboard_action_impl(self, req: KeyboardActionRequest) -> InputActionResult:
         """Execute a keyboard typing, key press, or hotkey combination."""
         if self._emergency_stop and self._emergency_stop.is_active():
             raise ValueError("Emergency stop is currently active. Desktop input blocked.")
@@ -184,28 +191,25 @@ class InputControllerService:
             )
 
     def click_element(self, req: ElementClickRequest) -> InputActionResult:
+        return run_in_desktop(self._click_element_impl, req)
+
+    def _click_element_impl(self, req: ElementClickRequest) -> InputActionResult:
         """Locate an accessible UI element, focus its window, and click its center."""
         if self._emergency_stop and self._emergency_stop.is_active():
-            return InputActionResult(
-                success=False,
-                action_type="click_element",
-                details={},
-                executed_at=datetime.now(timezone.utc).isoformat(),
-                error="Emergency stop is currently active. Operation blocked.",
-            )
+            raise ValueError("Emergency stop is currently active. Desktop input blocked.")
 
         try:
             # 1. Focus target window if handle given
             if req.window_handle:
                 from ..models.window import FocusWindowRequest
                 self._window_service.focus_window(FocusWindowRequest(handle=req.window_handle))
-                time.sleep(0.1)
+                time.sleep(0.3)
 
             # 2. Inspect UI tree of window
             inspect_req = InspectWindowUIRequest(
                 handle=req.window_handle,
-                max_depth=4,
-                max_elements=100,
+                max_depth=6,
+                max_elements=200,
             )
             inspect_resp = self._ui_service.inspect_window_ui(inspect_req)
 
@@ -233,10 +237,26 @@ class InputControllerService:
                     error=f"Element matching criteria not found in window {inspect_resp.window_title}",
                 )
 
-            # 4. Calculate center coordinates
+            # 4. Calculate center coordinates (clamped to visible virtual screen bounds)
             bounds = matched.bounds
-            center_x = (bounds.left + bounds.right) // 2
-            center_y = (bounds.top + bounds.bottom) // 2
+            desktop = self._screen_service.get_desktop_info()
+            vs = desktop.virtual_screen_bounds
+            min_x = vs.get("left", 0)
+            max_x = min_x + vs.get("width", 1920)
+            min_y = vs.get("top", 0)
+            max_y = min_y + vs.get("height", 1080)
+
+            vis_left = max(min_x, bounds.left)
+            vis_right = min(max_x, bounds.right)
+            vis_top = max(min_y, bounds.top)
+            vis_bottom = min(max_y, bounds.bottom)
+
+            if vis_left < vis_right and vis_top < vis_bottom:
+                center_x = (vis_left + vis_right) // 2
+                center_y = (vis_top + vis_bottom) // 2
+            else:
+                center_x = (bounds.left + bounds.right) // 2
+                center_y = (bounds.top + bounds.bottom) // 2
 
             # 5. Click center coordinates
             mouse_req = MouseActionRequest(

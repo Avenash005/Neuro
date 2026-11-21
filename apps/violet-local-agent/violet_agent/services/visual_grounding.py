@@ -118,7 +118,11 @@ class VisualGroundingService:
         condition_results: List[dict[str, Any]] = []
 
         for cond in request.conditions:
-            cond_res = self._check_condition(cond)
+            cond_res = self._check_condition(
+                cond,
+                target_handle=request.target_window_handle,
+                target_title=request.target_window_title,
+            )
             condition_results.append(cond_res)
 
         all_verified = all(c.get("passed", False) for c in condition_results)
@@ -130,72 +134,138 @@ class VisualGroundingService:
             f"{passed_count}/{total_count} conditions satisfied."
         )
 
+        screenshot_evidence = None
+        if request.capture_screenshot_evidence:
+            try:
+                img_bytes, meta = self.screen_service.capture_screen(max_dimension=1200, quality=70)
+                from pathlib import Path
+                evidence_dir = Path("data/evidence").resolve()
+                evidence_dir.mkdir(parents=True, exist_ok=True)
+                safe_action = request.action_type.replace(" ", "_").replace("/", "_")
+                ts_slug = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S_%f")
+                evidence_file = evidence_dir / f"evidence_{safe_action}_{ts_slug}.jpg"
+                evidence_file.write_bytes(img_bytes)
+
+                screenshot_evidence = {
+                    "captured": True,
+                    "timestamp": meta.timestamp,
+                    "width": meta.width,
+                    "height": meta.height,
+                    "byte_size": meta.byte_size,
+                    "format": meta.format,
+                    "file_path": str(evidence_file),
+                    "file_uri": evidence_file.as_uri(),
+                }
+            except Exception as exc:
+                logger.debug(f"Could not capture screenshot evidence: {exc}")
+                screenshot_evidence = {
+                    "captured": False,
+                    "error": str(exc),
+                }
+
         return VerificationResult(
             verified=all_verified,
             action_type=request.action_type,
             condition_results=condition_results,
+            screenshot_evidence=screenshot_evidence,
             evidence_summary=summary,
             verified_at=datetime.now(timezone.utc).isoformat(),
         )
 
-    def _check_condition(self, cond: VerificationCondition) -> dict[str, Any]:
+    def _check_condition(
+        self,
+        cond: VerificationCondition,
+        target_handle: Optional[int] = None,
+        target_title: Optional[str] = None,
+    ) -> dict[str, Any]:
         """Check a single verification condition."""
         start_time = time.time()
         timeout = cond.timeout_seconds
+
+        resolved_handle = cond.window_handle or target_handle
+        resolved_title = cond.window_title or cond.expected_title or target_title
 
         while time.time() - start_time <= timeout:
             if cond.check_type == "window_exists":
                 windows = self.window_service.list_windows()
                 if not windows:
-                    if not cond.expected_title or cond.expected_title.lower() in ["desktop", "desktop workspace", "workspace"]:
+                    if not resolved_title or resolved_title.lower() in ["desktop", "desktop workspace", "workspace"]:
                         return {
                             "check_type": cond.check_type,
                             "passed": True,
                             "message": "Desktop workspace confirmed present (headless/fallback)",
                         }
-                if cond.expected_title is not None and cond.expected_title != "":
-                    found = any(cond.expected_title.lower() in w.title.lower() for w in windows)
+                if resolved_title:
+                    found = any(resolved_title.lower() in w.title.lower() for w in windows)
+                elif resolved_handle:
+                    found = any(w.handle == resolved_handle for w in windows)
                 else:
                     found = len(windows) > 0
+
                 if found:
                     return {
                         "check_type": cond.check_type,
                         "passed": True,
-                        "message": f"Window matching '{cond.expected_title or 'any'}' was confirmed present",
+                        "message": f"Window matching '{resolved_title or resolved_handle or 'any'}' was confirmed present",
                     }
 
             elif cond.check_type == "window_title_contains":
                 windows = self.window_service.list_windows()
-                active = [w for w in windows if w.is_active]
-                current_title = active[0].title if active else (windows[0].title if windows else "")
-                if cond.expected_title and cond.expected_title.lower() in current_title.lower():
+                if resolved_handle:
+                    matching = [w for w in windows if w.handle == resolved_handle]
+                    current_title = matching[0].title if matching else ""
+                else:
+                    active = [w for w in windows if w.is_active]
+                    current_title = active[0].title if active else (windows[0].title if windows else "")
+
+                expected = cond.expected_title or cond.window_title or ""
+                if expected and expected.lower() in current_title.lower():
                     return {
                         "check_type": cond.check_type,
                         "passed": True,
-                        "message": f"Active window title '{current_title}' contains '{cond.expected_title}'",
+                        "message": f"Window title '{current_title}' contains '{expected}'",
                     }
 
             elif cond.check_type == "element_visible":
-                inspect_req = InspectWindowUIRequest(max_depth=3, max_elements=50)
+                inspect_req = InspectWindowUIRequest(
+                    handle=resolved_handle,
+                    title=resolved_title if not resolved_handle else None,
+                    max_depth=cond.max_depth or 8,
+                    max_elements=cond.max_elements or 250,
+                )
                 ui_res = self.ui_service.inspect_window_ui(inspect_req)
                 found = False
+
                 for el in ui_res.elements:
-                    if cond.expected_automation_id and el.automation_id == cond.expected_automation_id:
-                        found = el.visible
+                    matches = True
+                    if cond.expected_automation_id:
+                        if el.automation_id != cond.expected_automation_id:
+                            matches = False
+                    if cond.expected_element_name:
+                        if not el.name or cond.expected_element_name.lower() not in el.name.lower():
+                            matches = False
+                    if cond.control_type:
+                        if not el.control_type or cond.control_type.lower() != el.control_type.lower():
+                            matches = False
+
+                    if matches and el.visible:
+                        found = True
                         break
-                    if cond.expected_element_name and cond.expected_element_name.lower() in el.name.lower():
-                        found = el.visible
-                        break
+
                 if found:
+                    target_desc = cond.expected_element_name or cond.expected_automation_id or cond.control_type or "element"
                     return {
                         "check_type": cond.check_type,
                         "passed": True,
-                        "message": f"Element '{cond.expected_element_name or cond.expected_automation_id}' is visible",
+                        "message": f"Element '{target_desc}' is confirmed visible in window '{ui_res.window_title}'",
                     }
 
             elif cond.check_type == "dialog_opened":
                 windows = self.window_service.list_windows()
-                dialogs = [w for w in windows if "#32770" in (w.class_name or "") or "dialog" in w.title.lower()]
+                dialogs = [
+                    w for w in windows
+                    if "#32770" in (getattr(w, "class_name", "") or "") or "dialog" in w.title.lower()
+                ]
                 if dialogs:
                     return {
                         "check_type": cond.check_type,

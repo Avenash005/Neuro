@@ -18,6 +18,7 @@ class WindowInfo(BaseModel):
     title: str
     process_id: int
     process_name: str
+    class_name: Optional[str] = None
     bounds: WindowBounds
     is_minimized: bool = False
     is_maximized: bool = False

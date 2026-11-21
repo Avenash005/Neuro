@@ -7,6 +7,12 @@ import type {
 import { isSupabaseConfigured, supabase } from "../supabase";
 import { globalVioletAuditLogger } from "./auditLogger";
 
+const withTimeout = <T>(promise: Promise<T>, ms = 800): Promise<T> =>
+  Promise.race([
+    promise,
+    new Promise<never>((_, reject) => setTimeout(() => reject(new Error("Supabase request timeout")), ms)),
+  ]);
+
 export interface VioletStateChange {
   type: "tasks" | "approvals" | "handoffs" | "events";
   data: unknown;
@@ -53,40 +59,46 @@ class VioletService {
 
     if (isSupabaseConfigured && supabase) {
       try {
-        await (supabase.from("agent_tasks") as any).upsert({
-          id: task.id,
-          user_id: task.userId,
-          goal: task.goal,
-          source: task.source,
-          status: task.status,
-          plan: task.plan as any,
-          constraints: task.constraints as any,
-          execution_budget: task.executionBudget as any,
-          error_code: task.errorCode,
-          error_summary: task.errorSummary,
-          started_at: task.startedAt,
-          completed_at: task.completedAt,
-        });
+        await withTimeout(
+          (supabase.from("agent_tasks") as any).upsert({
+            id: task.id,
+            user_id: task.userId,
+            goal: task.goal,
+            source: task.source,
+            status: task.status,
+            plan: task.plan as any,
+            constraints: task.constraints as any,
+            execution_budget: task.executionBudget as any,
+            error_code: task.errorCode,
+            error_summary: task.errorSummary,
+            started_at: task.startedAt,
+            completed_at: task.completedAt,
+          }),
+          800
+        );
 
         // Upsert steps
         for (const step of task.plan) {
-          await (supabase.from("agent_task_steps") as any).upsert({
-            id: step.id,
-            task_id: task.id,
-            user_id: task.userId,
-            step_order: step.order,
-            title: step.title,
-            tool_name: step.toolName,
-            risk: step.risk,
-            status: step.status,
-            arguments_hash: step.argumentsHash || null,
-            arguments_preview: step.argumentsPreview || ({} as any),
-            result_summary: step.resultSummary || null,
-            evidence: step.evidence || ([] as any),
-            error_code: step.errorCode || null,
-            started_at: step.startedAt || null,
-            completed_at: step.completedAt || null,
-          });
+          await withTimeout(
+            (supabase.from("agent_task_steps") as any).upsert({
+              id: step.id,
+              task_id: task.id,
+              user_id: task.userId,
+              step_order: step.order,
+              title: step.title,
+              tool_name: step.toolName,
+              risk: step.risk,
+              status: step.status,
+              arguments_hash: step.argumentsHash || null,
+              arguments_preview: step.argumentsPreview || ({} as any),
+              result_summary: step.resultSummary || null,
+              evidence: step.evidence || ([] as any),
+              error_code: step.errorCode || null,
+              started_at: step.startedAt || null,
+              completed_at: step.completedAt || null,
+            }),
+            800
+          );
         }
       } catch (err) {
         console.warn("Could not sync task to Supabase, running with local in-memory store:", err);
@@ -103,10 +115,13 @@ class VioletService {
 
     if (isSupabaseConfigured && supabase) {
       try {
-        const { data, error } = await (supabase.from("agent_tasks") as any)
-          .select("*")
-          .eq("id", taskId)
-          .single();
+        const { data, error } = await withTimeout<any>(
+          (supabase.from("agent_tasks") as any)
+            .select("*")
+            .eq("id", taskId)
+            .single(),
+          800
+        );
         if (data && !error) {
           const task: VioletTask = {
             id: data.id,
@@ -137,10 +152,13 @@ class VioletService {
   async listTasks(): Promise<VioletTask[]> {
     if (isSupabaseConfigured && supabase) {
       try {
-        const { data, error } = await (supabase.from("agent_tasks") as any)
-          .select("*")
-          .order("created_at", { ascending: false })
-          .limit(50);
+        const { data, error } = await withTimeout<any>(
+          (supabase.from("agent_tasks") as any)
+            .select("*")
+            .order("created_at", { ascending: false })
+            .limit(50),
+          800
+        );
         if (data && !error && data.length > 0) {
           this.inMemoryTasks = data.map((d: any) => ({
             id: d.id,

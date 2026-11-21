@@ -277,9 +277,14 @@ def create_app(settings: Settings) -> FastAPI:
         body: ElementClickRequest,
         _authorized: bool = Depends(require_auth),
     ):
-        result = input_service.click_element(body)
-        audit.record("input.click_element", {"success": result.success, "details": result.details})
-        return result
+        try:
+            result = input_service.click_element(body)
+            audit.record("input.click_element", {"success": result.success, "details": result.details})
+            return result
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=f"Click element failed: {type(exc).__name__}: {str(exc)}") from exc
 
     # ── Process & Application Management Endpoints ──────────────────────────
 

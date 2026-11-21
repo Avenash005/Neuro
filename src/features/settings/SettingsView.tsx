@@ -1,6 +1,5 @@
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  User as UserIcon,
   Shield,
   Paintbrush,
   Brain as BrainIcon,
@@ -10,6 +9,7 @@ import {
   Link2,
   CreditCard,
   Eye,
+  EyeOff,
   HelpCircle,
   Info,
   Check,
@@ -25,10 +25,21 @@ import {
   Code2,
   Download,
   FileText,
+  LogOut,
+  Mail,
+  AlertCircle,
+  CheckCircle2,
+  Clock,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import type { User } from "@supabase/supabase-js";
-import type { MemoryRecord } from "../../lib/supabase";
+import {
+  signOutUser,
+  changeOwnerEmail,
+  changeOwnerPassword,
+  syncOwnerEmailWithBackend,
+  type MemoryRecord,
+} from "../../lib/supabase";
 
 type SettingsViewProps = {
   user: User | null;
@@ -113,6 +124,120 @@ export function SettingsView({ user, memories }: SettingsViewProps) {
     crash: true,
     anonymous: false,
   });
+
+  // Account & Security Management states
+  const [emailForm, setEmailForm] = useState({
+    newEmail: "",
+    currentPassword: "",
+  });
+  const [emailStatus, setEmailStatus] = useState<{
+    loading: boolean;
+    success?: string;
+    error?: string;
+    pendingVerification?: boolean;
+    pendingEmail?: string;
+  }>({ loading: false });
+
+  const [passwordForm, setPasswordForm] = useState({
+    currentPassword: "",
+    newPassword: "",
+    confirmPassword: "",
+  });
+  const [passwordStatus, setPasswordStatus] = useState<{
+    loading: boolean;
+    success?: string;
+    error?: string;
+  }>({ loading: false });
+
+  const [showCurrentPasswordForEmail, setShowCurrentPasswordForEmail] = useState(false);
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [isSyncingEmail, setIsSyncingEmail] = useState(false);
+
+  const handleEmailChange = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setEmailStatus({ loading: true });
+
+    try {
+      const result = await changeOwnerEmail({
+        currentPassword: emailForm.currentPassword,
+        newEmail: emailForm.newEmail,
+      });
+
+      if (result.requiresVerification) {
+        setEmailStatus({
+          loading: false,
+          success: result.message,
+          pendingVerification: true,
+          pendingEmail: result.newEmail,
+        });
+        setEmailForm({ newEmail: "", currentPassword: "" });
+      } else {
+        setEmailStatus({
+          loading: false,
+          success: result.message,
+          pendingVerification: false,
+        });
+        setEmailForm({ newEmail: "", currentPassword: "" });
+        setShowToast("Owner email updated and synchronized successfully");
+      }
+    } catch (err) {
+      setEmailStatus({
+        loading: false,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  };
+
+  const handlePasswordChange = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPasswordStatus({ loading: true });
+
+    try {
+      const result = await changeOwnerPassword({
+        currentPassword: passwordForm.currentPassword,
+        newPassword: passwordForm.newPassword,
+        confirmPassword: passwordForm.confirmPassword,
+      });
+
+      setPasswordStatus({
+        loading: false,
+        success: result.message,
+      });
+      setPasswordForm({
+        currentPassword: "",
+        newPassword: "",
+        confirmPassword: "",
+      });
+      setShowToast("Password updated successfully");
+    } catch (err) {
+      setPasswordStatus({
+        loading: false,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  };
+
+  const handleSyncVerifiedEmail = async (emailToSync: string) => {
+    setIsSyncingEmail(true);
+    try {
+      const result = await syncOwnerEmailWithBackend(emailToSync);
+      setShowToast(result.message || "Owner email synchronized with backend");
+      setEmailStatus((prev) => ({
+        ...prev,
+        pendingVerification: false,
+        success: "Verified email successfully synchronized with backend bootstrap record.",
+      }));
+    } catch (err) {
+      setEmailStatus((prev) => ({
+        ...prev,
+        error: err instanceof Error ? err.message : String(err),
+      }));
+    } finally {
+      setIsSyncingEmail(false);
+    }
+  };
 
   // Track if page is dirty (has changes compared to what we have)
   const [isDirty, setIsDirty] = useState(false);
@@ -227,8 +352,8 @@ export function SettingsView({ user, memories }: SettingsViewProps) {
   const noteCount = memories.filter(m => m.kind === "Note").length || 5;
 
   const sidebarItems = [
-    { id: "account" as const, label: "Account", icon: UserIcon },
-    { id: "security" as const, label: "Security", icon: Shield },
+    { id: "account" as const, label: "Account & Security", icon: ShieldCheck },
+    { id: "security" as const, label: "Security & Sessions", icon: Shield },
     { id: "appearance" as const, label: "Appearance", icon: Paintbrush },
     { id: "ai" as const, label: "AI Preferences", icon: BrainIcon },
     { id: "storage" as const, label: "Memory & Storage", icon: HardDrive },
@@ -287,111 +412,388 @@ export function SettingsView({ user, memories }: SettingsViewProps) {
               transition={{ duration: 0.15 }}
             >
               {activeTab === "account" && (
-                <article className="settings-section-card">
-                  <div className="settings-header-block">
-                    <h2>Account Profile</h2>
-                    <p>Manage your public identity, avatar representation, and account localization.</p>
-                  </div>
-
-                  <div className="flex items-center gap-4 py-2 border-b border-slate-100 dark:border-slate-800 pb-4">
-                    <div className="avatar w-16 h-16 text-lg font-bold">{profileForm.fullName.slice(0, 2).toUpperCase()}</div>
-                    <div>
-                      <h4 className="text-sm font-semibold text-slate-800 dark:text-slate-200">Avatar Image</h4>
-                      <p className="text-xs text-slate-400 mt-0.5">JPG, PNG or GIF. Max size 2MB.</p>
-                      <div className="flex gap-2 mt-2">
-                        <button className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded text-xs font-semibold">Upload Image</button>
-                        <button className="px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-500 rounded text-xs font-semibold">Remove</button>
+                <div className="space-y-6">
+                  {/* Account & Security Header & Status */}
+                  <article className="settings-section-card">
+                    <div className="settings-header-block">
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                        <div>
+                          <h2>Account & Security</h2>
+                          <p>Manage your authenticated VIOLET owner identity, primary email, password credentials, and sessions.</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                            <ShieldCheck size={14} className="text-emerald-500" />
+                            Owner Verified
+                          </span>
+                        </div>
                       </div>
                     </div>
-                  </div>
 
-                  <div className="settings-form-grid">
-                    <div className="settings-field-group">
-                      <label>Full Name</label>
-                      <input
-                        value={profileForm.fullName}
-                        onChange={e => {
-                          setProfileForm({ ...profileForm, fullName: e.target.value });
-                          setIsDirty(true);
-                        }}
-                      />
-                    </div>
-                    <div className="settings-field-group">
-                      <label>Username</label>
-                      <input
-                        value={profileForm.username}
-                        onChange={e => {
-                          setProfileForm({ ...profileForm, username: e.target.value });
-                          setIsDirty(true);
-                        }}
-                      />
-                    </div>
-                    <div className="settings-field-group">
-                      <label>Email Address</label>
-                      <input
-                        type="email"
-                        value={profileForm.email}
-                        onChange={e => {
-                          setProfileForm({ ...profileForm, email: e.target.value });
-                          setIsDirty(true);
-                        }}
-                      />
-                    </div>
-                    <div className="settings-field-group">
-                      <label>Phone Number</label>
-                      <input
-                        value={profileForm.phone}
-                        onChange={e => {
-                          setProfileForm({ ...profileForm, phone: e.target.value });
-                          setIsDirty(true);
-                        }}
-                      />
-                    </div>
-                    <div className="settings-field-group settings-form-full">
-                      <label>Bio</label>
-                      <textarea
-                        value={profileForm.bio}
-                        onChange={e => {
-                          setProfileForm({ ...profileForm, bio: e.target.value });
-                          setIsDirty(true);
-                        }}
-                      />
-                    </div>
-                    <div className="settings-field-group">
-                      <label>Time Zone</label>
-                      <select
-                        value={profileForm.timezone}
-                        onChange={e => {
-                          setProfileForm({ ...profileForm, timezone: e.target.value });
-                          setIsDirty(true);
-                        }}
-                      >
-                        <option>UTC+05:30 (India Standard Time)</option>
-                        <option>UTC-08:00 (Pacific Standard Time)</option>
-                        <option>UTC+00:00 (Coordinated Universal Time)</option>
-                      </select>
-                    </div>
-                    <div className="settings-field-group">
-                      <label>Language</label>
-                      <select
-                        value={profileForm.language}
-                        onChange={e => {
-                          setProfileForm({ ...profileForm, language: e.target.value });
-                          setIsDirty(true);
-                        }}
-                      >
-                        <option value="en-US">English (United States)</option>
-                        <option value="en-GB">English (United Kingdom)</option>
-                        <option value="es-ES">Español</option>
-                      </select>
-                    </div>
-                  </div>
+                    {/* Owner Status Grid */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-4 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800">
+                      <div>
+                        <div className="text-[11px] font-medium text-slate-400 uppercase tracking-wider">Current Owner Email</div>
+                        <div className="text-sm font-semibold text-slate-800 dark:text-slate-100 mt-0.5 truncate">
+                          {user?.email || "owner@violet.ai"}
+                        </div>
+                        <div className="text-[11px] text-emerald-600 dark:text-emerald-400 mt-1 flex items-center gap-1">
+                          <Check size={11} /> Primary login identity
+                        </div>
+                      </div>
 
-                  <div className="flex justify-between items-center pt-4 border-t border-slate-100 dark:border-slate-800 mt-4">
-                    <button className="text-xs text-red-500 hover:underline font-semibold" onClick={() => alert("Are you sure you want to delete your account? This is irreversible.")}>Delete Account...</button>
-                    <button className="px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded text-xs font-semibold flex items-center gap-1"><KeyRound size={13} /> Change Password</button>
-                  </div>
-                </article>
+                      <div>
+                        <div className="text-[11px] font-medium text-slate-400 uppercase tracking-wider">Owner UUID (Stable)</div>
+                        <div className="text-sm font-mono font-medium text-slate-700 dark:text-slate-300 mt-0.5 truncate" title={user?.id || ""}>
+                          {user?.id ? `${user.id.slice(0, 18)}...` : "Single-User Root"}
+                        </div>
+                        <div className="text-[11px] text-slate-400 mt-1">Immutable root identity</div>
+                      </div>
+
+                      <div>
+                        <div className="text-[11px] font-medium text-slate-400 uppercase tracking-wider">Session Status</div>
+                        <div className="text-sm font-semibold text-indigo-600 dark:text-indigo-400 mt-0.5 flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                          Active & Persisted
+                        </div>
+                        <div className="text-[11px] text-slate-400 mt-1">Supabase Auth JWT · Auto-Refresh</div>
+                      </div>
+                    </div>
+
+                    {/* Pending Email Verification Notice (if any) */}
+                    {(user?.new_email || emailStatus.pendingVerification) && (
+                      <div className="mt-4 p-4 rounded-xl border border-amber-300 bg-amber-50 dark:bg-amber-950/40 dark:border-amber-800 text-amber-900 dark:text-amber-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                        <div className="flex items-start gap-3">
+                          <Clock size={18} className="text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                          <div>
+                            <div className="font-semibold text-sm">Email Change Pending Verification</div>
+                            <p className="text-xs text-amber-700 dark:text-amber-300 mt-0.5">
+                              A confirmation link was sent to <strong>{user?.new_email || emailStatus.pendingEmail}</strong>. Once you confirm the link in your email, click the button to synchronize your backend bootstrap record.
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleSyncVerifiedEmail(user?.new_email || emailStatus.pendingEmail || "")}
+                          disabled={isSyncingEmail}
+                          className="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 shrink-0 transition-colors shadow-sm"
+                        >
+                          <RefreshCw size={12} className={isSyncingEmail ? "animate-spin" : ""} />
+                          {isSyncingEmail ? "Synchronizing..." : "Synchronize Verified Email"}
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Change Email Address Form */}
+                    <div className="mt-6 pt-6 border-t border-slate-100 dark:border-slate-800">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Mail size={16} className="text-indigo-600 dark:text-indigo-400" />
+                        <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">Change Email Address</h3>
+                      </div>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
+                        Update your primary login email address. Requires current password verification. The backend owner bootstrap identity will be synchronized upon verification.
+                      </p>
+
+                      {emailStatus.success && (
+                        <div className="mb-4 p-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-lg text-xs text-emerald-800 dark:text-emerald-300 flex items-center gap-2">
+                          <CheckCircle2 size={15} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
+                          <span>{emailStatus.success}</span>
+                        </div>
+                      )}
+
+                      {emailStatus.error && (
+                        <div className="mb-4 p-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 rounded-lg text-xs text-rose-800 dark:text-rose-300 flex items-center gap-2">
+                          <AlertCircle size={15} className="text-rose-600 dark:text-rose-400 shrink-0" />
+                          <span>{emailStatus.error}</span>
+                        </div>
+                      )}
+
+                      <form onSubmit={handleEmailChange} className="space-y-3 max-w-xl">
+                        <div className="settings-field-group">
+                          <label>Current Email Address</label>
+                          <input
+                            type="email"
+                            value={user?.email || ""}
+                            disabled
+                            className="opacity-70 cursor-not-allowed bg-slate-100 dark:bg-slate-800/60"
+                          />
+                        </div>
+
+                        <div className="settings-field-group">
+                          <label>New Email Address</label>
+                          <input
+                            type="email"
+                            placeholder="Enter new owner email"
+                            value={emailForm.newEmail}
+                            onChange={e => setEmailForm({ ...emailForm, newEmail: e.target.value })}
+                            required
+                          />
+                        </div>
+
+                        <div className="settings-field-group">
+                          <label>Current Password (Verification)</label>
+                          <div className="relative">
+                            <input
+                              type={showCurrentPasswordForEmail ? "text" : "password"}
+                              placeholder="Confirm with your current password"
+                              value={emailForm.currentPassword}
+                              onChange={e => setEmailForm({ ...emailForm, currentPassword: e.target.value })}
+                              required
+                              className="pr-10"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setShowCurrentPasswordForEmail(!showCurrentPasswordForEmail)}
+                              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                            >
+                              {showCurrentPasswordForEmail ? <EyeOff size={15} /> : <Eye size={15} />}
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="pt-2">
+                          <button
+                            type="submit"
+                            disabled={emailStatus.loading || !emailForm.newEmail || !emailForm.currentPassword}
+                            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-lg text-xs font-semibold flex items-center gap-2 transition-colors shadow-sm"
+                          >
+                            {emailStatus.loading ? (
+                              <>
+                                <LoaderCircle size={14} className="animate-spin" />
+                                <span>Verifying & Updating...</span>
+                              </>
+                            ) : (
+                              <>
+                                <Mail size={14} />
+                                <span>Update Email Address</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      </form>
+                    </div>
+
+                    {/* Change Password Form */}
+                    <div className="mt-8 pt-6 border-t border-slate-100 dark:border-slate-800">
+                      <div className="flex items-center gap-2 mb-1">
+                        <KeyRound size={16} className="text-violet-600 dark:text-violet-400" />
+                        <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">Change Password</h3>
+                      </div>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
+                        Update your account password. Requires your current password and at least 8 characters. Passwords are never logged or stored in plain text.
+                      </p>
+
+                      {passwordStatus.success && (
+                        <div className="mb-4 p-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-lg text-xs text-emerald-800 dark:text-emerald-300 flex items-center gap-2">
+                          <CheckCircle2 size={15} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
+                          <span>{passwordStatus.success}</span>
+                        </div>
+                      )}
+
+                      {passwordStatus.error && (
+                        <div className="mb-4 p-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 rounded-lg text-xs text-rose-800 dark:text-rose-300 flex items-center gap-2">
+                          <AlertCircle size={15} className="text-rose-600 dark:text-rose-400 shrink-0" />
+                          <span>{passwordStatus.error}</span>
+                        </div>
+                      )}
+
+                      <form onSubmit={handlePasswordChange} className="space-y-3 max-w-xl">
+                        <div className="settings-field-group">
+                          <label>Current Password</label>
+                          <div className="relative">
+                            <input
+                              type={showCurrentPassword ? "text" : "password"}
+                              placeholder="Enter your current password"
+                              value={passwordForm.currentPassword}
+                              onChange={e => setPasswordForm({ ...passwordForm, currentPassword: e.target.value })}
+                              required
+                              className="pr-10"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                            >
+                              {showCurrentPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="settings-field-group">
+                          <label>New Password</label>
+                          <div className="relative">
+                            <input
+                              type={showNewPassword ? "text" : "password"}
+                              placeholder="Enter at least 8 characters"
+                              value={passwordForm.newPassword}
+                              onChange={e => setPasswordForm({ ...passwordForm, newPassword: e.target.value })}
+                              minLength={8}
+                              required
+                              className="pr-10"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setShowNewPassword(!showNewPassword)}
+                              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                            >
+                              {showNewPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                            </button>
+                          </div>
+                          <p className="text-[11px] text-slate-400 mt-1">Must be at least 8 characters long.</p>
+                        </div>
+
+                        <div className="settings-field-group">
+                          <label>Confirm New Password</label>
+                          <div className="relative">
+                            <input
+                              type={showConfirmPassword ? "text" : "password"}
+                              placeholder="Re-enter new password"
+                              value={passwordForm.confirmPassword}
+                              onChange={e => setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })}
+                              minLength={8}
+                              required
+                              className="pr-10"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                            >
+                              {showConfirmPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="pt-2">
+                          <button
+                            type="submit"
+                            disabled={passwordStatus.loading || !passwordForm.currentPassword || !passwordForm.newPassword || !passwordForm.confirmPassword}
+                            className="px-4 py-2 bg-violet-600 hover:bg-violet-700 disabled:opacity-50 text-white rounded-lg text-xs font-semibold flex items-center gap-2 transition-colors shadow-sm"
+                          >
+                            {passwordStatus.loading ? (
+                              <>
+                                <LoaderCircle size={14} className="animate-spin" />
+                                <span>Verifying & Updating...</span>
+                              </>
+                            ) : (
+                              <>
+                                <KeyRound size={14} />
+                                <span>Update Password</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      </form>
+                    </div>
+
+                    {/* Session Controls & Sign Out Footer */}
+                    <div className="mt-8 pt-4 border-t border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                      <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                        <ShieldCheck size={14} className="text-emerald-500" />
+                        <span>Owner Session Protected by Supabase Auth & VIOLET Local Guard</span>
+                      </div>
+                      <button
+                        type="button"
+                        className="px-4 py-2 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 dark:hover:bg-rose-900/50 text-rose-600 dark:text-rose-300 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-sm"
+                        onClick={() => void signOutUser()}
+                      >
+                        <LogOut size={13} />
+                        <span>Sign Out of VIOLET</span>
+                      </button>
+                    </div>
+                  </article>
+
+                  {/* Public Profile Details */}
+                  <article className="settings-section-card">
+                    <div className="settings-header-block">
+                      <h2>Profile Information</h2>
+                      <p>Customize your display representation, timezone, and workspace localization preferences.</p>
+                    </div>
+
+                    <div className="flex items-center gap-4 py-2 border-b border-slate-100 dark:border-slate-800 pb-4">
+                      <div className="avatar w-16 h-16 text-lg font-bold">{profileForm.fullName.slice(0, 2).toUpperCase()}</div>
+                      <div>
+                        <h4 className="text-sm font-semibold text-slate-800 dark:text-slate-200">Avatar Image</h4>
+                        <p className="text-xs text-slate-400 mt-0.5">JPG, PNG or GIF. Max size 2MB.</p>
+                        <div className="flex gap-2 mt-2">
+                          <button className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded text-xs font-semibold">Upload Image</button>
+                          <button className="px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-500 rounded text-xs font-semibold">Remove</button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="settings-form-grid">
+                      <div className="settings-field-group">
+                        <label>Full Name</label>
+                        <input
+                          value={profileForm.fullName}
+                          onChange={e => {
+                            setProfileForm({ ...profileForm, fullName: e.target.value });
+                            setIsDirty(true);
+                          }}
+                        />
+                      </div>
+                      <div className="settings-field-group">
+                        <label>Username</label>
+                        <input
+                          value={profileForm.username}
+                          onChange={e => {
+                            setProfileForm({ ...profileForm, username: e.target.value });
+                            setIsDirty(true);
+                          }}
+                        />
+                      </div>
+                      <div className="settings-field-group">
+                        <label>Phone Number</label>
+                        <input
+                          value={profileForm.phone}
+                          onChange={e => {
+                            setProfileForm({ ...profileForm, phone: e.target.value });
+                            setIsDirty(true);
+                          }}
+                        />
+                      </div>
+                      <div className="settings-field-group settings-form-full">
+                        <label>Bio</label>
+                        <textarea
+                          value={profileForm.bio}
+                          onChange={e => {
+                            setProfileForm({ ...profileForm, bio: e.target.value });
+                            setIsDirty(true);
+                          }}
+                        />
+                      </div>
+                      <div className="settings-field-group">
+                        <label>Time Zone</label>
+                        <select
+                          value={profileForm.timezone}
+                          onChange={e => {
+                            setProfileForm({ ...profileForm, timezone: e.target.value });
+                            setIsDirty(true);
+                          }}
+                        >
+                          <option>UTC+05:30 (India Standard Time)</option>
+                          <option>UTC-08:00 (Pacific Standard Time)</option>
+                          <option>UTC+00:00 (Coordinated Universal Time)</option>
+                        </select>
+                      </div>
+                      <div className="settings-field-group">
+                        <label>Language</label>
+                        <select
+                          value={profileForm.language}
+                          onChange={e => {
+                            setProfileForm({ ...profileForm, language: e.target.value });
+                            setIsDirty(true);
+                          }}
+                        >
+                          <option value="en-US">English (United States)</option>
+                          <option value="en-GB">English (United Kingdom)</option>
+                          <option value="es-ES">Español</option>
+                        </select>
+                      </div>
+                    </div>
+                  </article>
+                </div>
               )}
 
               {activeTab === "security" && (

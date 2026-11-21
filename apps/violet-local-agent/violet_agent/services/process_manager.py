@@ -87,6 +87,13 @@ class ProcessManagerService:
                     message="Refusing to terminate local agent's own process",
                 )
 
+            if pid in (0, 4) or pname.lower() in ("system", "system idle process", "csrss.exe", "smss.exe", "wininit.exe", "services.exe", "lsass.exe"):
+                return TerminateProcessResponse(
+                    success=False,
+                    pid=pid,
+                    message=f"Refusing to terminate protected system process '{pname}' (PID: {pid})",
+                )
+
             if force:
                 proc.kill()
                 action_word = "killed"

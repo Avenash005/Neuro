@@ -1,0 +1,827 @@
+{
+  "test_suite": "VIOLET AI Phase 2 Windows Agent QA Audit & Extended Validation Suite",
+  "timestamp": "2026-11-19T14:28:45.421237+00:00",
+  "target": "http://127.0.0.1:8765",
+  "environment": {
+    "os": "Windows 11 Pro",
+    "agent_version": "2.0.0",
+    "python_version": "3.14.0",
+    "subsystems": [
+      "Win32 API",
+      "Windows UI Automation (pywinauto)",
+      "MSS Screen Capture",
+      "HMAC-SHA256"
+    ]
+  },
+  "metrics": {
+    "total": 55,
+    "passed": 55,
+    "failed": 0,
+    "blocked": 0,
+    "not_tested": 0,
+    "previously_tested_count": 31,
+    "newly_tested_count": 24,
+    "pass_rate_percentage": 100.0,
+    "total_duration_ms": 11368.69
+  },
+  "results": [
+    {
+      "test_id": "A-01",
+      "category": "Desktop Observation",
+      "name": "Desktop Information and Multi-Monitor Enumeration",
+      "suite_type": "Previously Tested",
+      "status": "PASSED",
+      "duration_ms": 97.92,
+      "details": {
+        "status_code": 200,
+        "monitor_count": 2,
+        "bounds": {
+          "left": 0,
+          "top": -198,
+          "width": 3456,
+          "height": 1278
+        }
+      },
+      "error": null
+    },
+    {
+      "test_id": "A-02",
+      "category": "Desktop Observation",
+      "name": "Full Desktop Screenshot Capture (JPEG thumbnail scaled to max_dimension 1200)",
+      "suite_type": "Previously Tested",
+      "status": "PASSED",
+      "duration_ms": 33.34,
+      "details": {
+        "status_code": 200,
+        "content_type": "image/jpeg",
+        "capture_width": "1200",
+        "capture_height": "750",
+        "byte_size": 6269
+      },
+      "error": null
+    },
+    {
+      "test_id": "A-03",
+      "category": "Desktop Observation",
+      "name": "Region-Bounded Screenshot Capture",
+      "suite_type": "Previously Tested",
+      "status": "PASSED",
+      "duration_ms": 27.35,
+      "details": {
+        "status_code": 200,
+        "region": {
+          "left": 0,
+          "top": 0,
+          "width": 400,
+          "height": 300
+        },
+        "byte_size": 1894
+      },
+      "error": null
+    },
+    {
+      "test_id": "B-01",
+      "category": "Windows Management",
+      "name": "Window Enumeration with Bounds and Visibility",
+      "suite_type": "Previously Tested",
+      "status": "PASSED",
+      "duration_ms": 15.31,
+      "details": {
+        "status_code": 200,
+        "total_windows": 9,
+        "sample_titles": [
+          "Neuro - Antigravity IDE - VioletCommandCenter.tsx",
+          "Create Personal AI Agent - Opera",
+          "New Tab - Google Chrome",
+          "NVIDIA GeForce Overlay"
+        ]
+      },
+      "error": null
+    },
+    {
+      "test_id": "B-02",
+      "category": "Windows Management",
+      "name": "Window Focus and Foreground Activation",
+      "suite_type": "Previously Tested",
+      "status": "PASSED",
+      "duration_ms": 14.95,
+      "details": {
+        "status_code": 200,
+        "focused_handle": 67136,
+        "message": "Successfully focused window 'Neuro - Antigravity IDE - VioletCommandCenter.tsx' (HWND 67136)"
+      },
+      "error": null
+    },
+    {
+      "test_id": "C-01",
+      "category": "UI Automation",
+      "name": "UI Element Hierarchy Inspection via UIA",
+      "suite_type": "Previously Tested",
+      "status": "PASSED",
+      "duration_ms": 515.28,
+      "details": {
+        "status_code": 200,
+        "element_count": 80,
+        "sample_types": [
+          "Pane",
+          "Pane",
+          "Pane",
+          "Pane"
+        ]
+      },
+      "error": null
+    },
+    {
+      "test_id": "D-01",
+      "category": "Mouse/Keyboard Automation",
+      "name": "Smooth Mouse Movement with Coordinate Bounds Validation",
+      "suite_type": "Previously Tested",
+      "status": "PASSED",
+      "duration_ms": 291.31,
+      "details": {
+        "status_code": 200,
+        "success": true,
+        "position": {
+          "x": 500,
+          "y": 400
+        }
+      },
+      "error": null
+    },
+    {
+      "test_id": "D-02",
+      "category": "Mouse/Keyboard Automation",
+      "name": "Keyboard Typing Simulation",
+      "suite_type": "Previously Tested",
+      "status": "PASSED",
+      "duration_ms": 84.83,
+      "details": {
+        "status_code": 200,
+        "success": true
+      },
+      "error": null
+    },
+    {
+      "test_id": "D-03",
+      "category": "Mouse/Keyboard Automation",
+      "name": "Key Press / Hotkey Execution",
+      "suite_type": "Previously Tested",
+      "status": "PASSED",
+      "duration_ms": 54.02,
+      "details": {
+        "status_code": 200,
+        "success": true
+      },
+      "error": null
+    },
+    {
+      "test_id": "E-01",
+      "category": "Process Management",
+      "name": "Process Enumeration with Resource Metrics",
+      "suite_type": "Previously Tested",
+      "status": "PASSED",
+      "duration_ms": 503.81,
+      "details": {
+        "status_code": 200,
+        "process_count": 50,
+        "sample_process": "MemCompression"
+      },
+      "error": null
+    },
+    {
+      "test_id": "E-02",
+      "category": "Application Management",
+      "name": "Approved Application Launch (cmd)",
+      "suite_type": "Previously Tested",
+      "status": "PASSED",
+      "duration_ms": 17.06,
+      "details": {
+        "status_code": 200,
+        "spawned_pid": 5136,
+        "message": "Successfully launched 'cmd' (PID: 5136)"
+      },
+      "error": null
+    },
+    {
+      "test_id": "E-03",
+      "category": "Process Management",
+      "name": "Process Termination by PID",
+      "suite_type": "Previously Tested",
+      "status": "PASSED",
+      "duration_ms": 26.17,
+      "details": {
+        "status_code": 200,
+        "terminated_pid": 5136,
+        "message": "Successfully killed process 'cmd.exe' (PID: 5136)"
+      },
+      "error": null
+    },
+    {
+      "test_id": "F-01",
+      "category": "Visual Grounding",
+      "name": "Coordinate Normalization to [0.0, 1.0] Space",
+      "suite_type": "Previously Tested",
+      "status": "PASSED",
+      "duration_ms": 588.08,
+      "details": {
+        "status_code": 200,
+        "grounded_count": 50,
+        "all_in_bounds": true
+      },
+      "error": null
+    },
+    {
+      "test_id": "G-01",
+      "category": "Element Interaction",
+      "name": "Click Accessible Element Center by Name and Control Type",
+      "suite_type": "Previously Tested",
+      "status": "PASSED",
+      "duration_ms": 981.01,
+      "details": {
+        "status_code": 200,
+        "success": true,
+        "clicked_at": {
+          "x": 2688,
+          "y": 258
+        }
+      },
+      "error": null
+    },
+    {
+      "test_id": "H-01",
+      "category": "Post-Action Verification",
+      "name": "Positive Verification: Window Exists with Screenshot Evidence",
+      "suite_type": "Previously Tested",
+      "status": "PASSED",
+      "duration_ms": 34.3,
+      "details": {
+        "status_code": 200,
+        "verified": true,
+        "screenshot": {
+          "captured": true,
+          "timestamp": "2026-11-19T14:28:37.218079+00:00",
+          "width": 1200,
+          "height": 750,
+          "byte_size": 6269,
+          "format": "jpeg",
+          "file_path": "D:\\violet\\Neuro\\data\\evidence\\evidence_focus_window_20261119_142837_218935.jpg",
+          "file_uri": "file:///D:/violet/Neuro/data/evidence/evidence_focus_window_20261119_142837_218935.jpg"
+        }
+      },
+      "error": null
+    },
+    {
+      "test_id": "H-02",
+      "category": "Post-Action Verification",
+      "name": "Positive Verification: Element Visible in Target Window",
+      "suite_type": "Previously Tested",
+      "status": "PASSED",
+      "duration_ms": 803.97,
+      "details": {
+        "status_code": 200,
+        "verified": true,
+        "conditions": [
+          {
+            "check_type": "element_visible",
+            "passed": true,
+            "message": "Element 'Neuro - Antigravity IDE - VioletCommandCenter.tsx' is confirmed visible in window 'Neuro - Antigravity IDE - VioletCommandCenter.tsx'"
+          }
+        ]
+      },
+      "error": null
+    },
+    {
+      "test_id": "H-03",
+      "category": "Post-Action Verification",
+      "name": "Negative Verification: Correct Rejection of Non-Existent Element",
+      "suite_type": "Previously Tested",
+      "status": "PASSED",
+      "duration_ms": 932.67,
+      "details": {
+        "status_code": 200,
+        "verified": false,
+        "message": "Condition 'element_visible' timed out after 0.8s without satisfying criteria"
+      },
+      "error": null
+    },
+    {
+      "test_id": "I-01",
+      "category": "Device Pairing",
+      "name": "Pairing Challenge Generation with Nonce",
+      "suite_type": "Previously Tested",
+      "status": "PASSED",
+      "duration_ms": 16.7,
+      "details": {
+        "status_code": 200,
+        "challenge_id": "47a562a3812e33579ddbfb6ca462938f",
+        "has_nonce": true
+      },
+      "error": null
+    },
+    {
+      "test_id": "I-02",
+      "category": "Device Pairing",
+      "name": "HMAC-SHA256 Challenge Signature Verification and Session Establishment",
+      "suite_type": "Previously Tested",
+      "status": "PASSED",
+      "duration_ms": 15.48,
+      "details": {
+        "status_code": 200,
+        "success": true,
+        "has_session_token": true
+      },
+      "error": null
+    },
+    {
+      "test_id": "I-03",
+      "category": "Device Pairing",
+      "name": "Active Pairing Session Heartbeat and Validation",
+      "suite_type": "Previously Tested",
+      "status": "PASSED",
+      "duration_ms": 15.17,
+      "details": {
+        "status_code": 200,
+        "active": true,
+        "time_remaining_seconds": 86399
+      },
+      "error": null
+    },
+    {
+      "test_id": "I-04",
+      "category": "Device Pairing",
+      "name": "Pairing Session Revocation",
+      "suite_type": "Previously Tested",
+      "status": "PASSED",
+      "duration_ms": 15.39,
+      "details": {
+        "status_code": 200,
+        "revoked": true
+      },
+      "error": null
+    },
+    {
+      "test_id": "J-01",
+      "category": "Emergency Stop",
+      "name": "Trigger Emergency Stop and Halt Desktop Input",
+      "suite_type": "Previously Tested",
+      "status": "PASSED",
+      "duration_ms": 369.93,
+      "details": {
+        "status_code": 200,
+        "is_stopped": true
+      },
+      "error": null
+    },
+    {
+      "test_id": "J-02",
+      "category": "Emergency Stop",
+      "name": "Enforce Input Blockade (HTTP 400) While Emergency Stop is Active",
+      "suite_type": "Previously Tested",
+      "status": "PASSED",
+      "duration_ms": 18.74,
+      "details": {
+        "status_code": 400,
+        "detail": "Emergency stop is currently active. Desktop input blocked."
+      },
+      "error": null
+    },
+    {
+      "test_id": "J-03",
+      "category": "Emergency Stop",
+      "name": "Resume Operations from Emergency Stop",
+      "suite_type": "Previously Tested",
+      "status": "PASSED",
+      "duration_ms": 15.57,
+      "details": {
+        "status_code": 200,
+        "is_stopped": false
+      },
+      "error": null
+    },
+    {
+      "test_id": "J-04",
+      "category": "Emergency Stop",
+      "name": "Verify Input Functionality Restored After Resume",
+      "suite_type": "Previously Tested",
+      "status": "PASSED",
+      "duration_ms": 67.8,
+      "details": {
+        "status_code": 200,
+        "success": true
+      },
+      "error": null
+    },
+    {
+      "test_id": "SEC-01",
+      "category": "Security & Reliability",
+      "name": "Missing Authentication Rejection (HTTP 401)",
+      "suite_type": "Previously Tested",
+      "status": "PASSED",
+      "duration_ms": 23.31,
+      "details": {
+        "status_code": 401,
+        "detail": "Invalid or missing bearer token"
+      },
+      "error": null
+    },
+    {
+      "test_id": "SEC-02",
+      "category": "Security & Reliability",
+      "name": "Invalid Token Authentication Rejection (HTTP 401)",
+      "suite_type": "Previously Tested",
+      "status": "PASSED",
+      "duration_ms": 15.9,
+      "details": {
+        "status_code": 401,
+        "detail": "Invalid or missing bearer token"
+      },
+      "error": null
+    },
+    {
+      "test_id": "SEC-03",
+      "category": "Security & Reliability",
+      "name": "Out-of-Bounds Coordinates Rejection (HTTP 400)",
+      "suite_type": "Previously Tested",
+      "status": "PASSED",
+      "duration_ms": 16.17,
+      "details": {
+        "status_code": 400,
+        "detail": "Coordinates (99999, -500) out of virtual screen bounds: X=[0, 3456], Y=[-198, 1080]"
+      },
+      "error": null
+    },
+    {
+      "test_id": "SEC-04",
+      "category": "Security & Reliability",
+      "name": "Unapproved Application Launch Rejection (HTTP 403)",
+      "suite_type": "Previously Tested",
+      "status": "PASSED",
+      "duration_ms": 15.64,
+      "details": {
+        "status_code": 403,
+        "detail": "Application 'unapproved_malware.exe' is not in the approved application allowlist or approved workspace roots"
+      },
+      "error": null
+    },
+    {
+      "test_id": "SEC-05",
+      "category": "Security & Reliability",
+      "name": "Protected System Process Termination Rejection (HTTP 403)",
+      "suite_type": "Previously Tested",
+      "status": "PASSED",
+      "duration_ms": 15.18,
+      "details": {
+        "status_code": 403,
+        "detail": "Refusing to terminate protected system process 'System' (PID: 4)"
+      },
+      "error": null
+    },
+    {
+      "test_id": "SEC-06",
+      "category": "Security & Reliability",
+      "name": "Zero Secret Leakage in Audit Trail & Logs",
+      "suite_type": "Previously Tested",
+      "status": "PASSED",
+      "duration_ms": 9.86,
+      "details": {
+        "checked_audit_lines": 268,
+        "token_found": false
+      },
+      "error": null
+    },
+    {
+      "test_id": "D-04",
+      "category": "Mouse/Keyboard Automation",
+      "name": "Mouse Right-Click Action",
+      "suite_type": "Newly Tested",
+      "status": "PASSED",
+      "duration_ms": 124.07,
+      "details": {
+        "status_code": 200,
+        "action": "right_click"
+      },
+      "error": null
+    },
+    {
+      "test_id": "D-05",
+      "category": "Mouse/Keyboard Automation",
+      "name": "Mouse Double-Click Action",
+      "suite_type": "Newly Tested",
+      "status": "PASSED",
+      "duration_ms": 83.23,
+      "details": {
+        "status_code": 200,
+        "action": "double_click"
+      },
+      "error": null
+    },
+    {
+      "test_id": "D-06",
+      "category": "Mouse/Keyboard Automation",
+      "name": "Mouse Vertical Scroll Simulation",
+      "suite_type": "Newly Tested",
+      "status": "PASSED",
+      "duration_ms": 54.38,
+      "details": {
+        "status_code": 200,
+        "scroll_amount": 120
+      },
+      "error": null
+    },
+    {
+      "test_id": "D-07",
+      "category": "Mouse/Keyboard Automation",
+      "name": "Safe In-Bounds Mouse Drag Action",
+      "suite_type": "Newly Tested",
+      "status": "PASSED",
+      "duration_ms": 431.84,
+      "details": {
+        "status_code": 200,
+        "drag_to": {
+          "x": 370,
+          "y": 370
+        }
+      },
+      "error": null
+    },
+    {
+      "test_id": "D-08",
+      "category": "Mouse/Keyboard Automation",
+      "name": "Keyboard Single-Key Press ('shift')",
+      "suite_type": "Newly Tested",
+      "status": "PASSED",
+      "duration_ms": 79.35,
+      "details": {
+        "status_code": 200,
+        "key": "shift"
+      },
+      "error": null
+    },
+    {
+      "test_id": "D-09",
+      "category": "Mouse/Keyboard Automation",
+      "name": "Keyboard Multi-Key Modifier Hotkey Combination",
+      "suite_type": "Newly Tested",
+      "status": "PASSED",
+      "duration_ms": 77.15,
+      "details": {
+        "status_code": 200,
+        "keys": [
+          "ctrl",
+          "shift"
+        ]
+      },
+      "error": null
+    },
+    {
+      "test_id": "E-04",
+      "category": "Application Management",
+      "name": "Application Launch with Command-Line Args and Working Directory",
+      "suite_type": "Newly Tested",
+      "status": "PASSED",
+      "duration_ms": 29.5,
+      "details": {
+        "status_code": 200,
+        "pid": 33136,
+        "app_name": "cmd"
+      },
+      "error": null
+    },
+    {
+      "test_id": "E-05",
+      "category": "Application Management",
+      "name": "Non-Existent Unapproved Binary Launch Rejection (HTTP 403)",
+      "suite_type": "Newly Tested",
+      "status": "PASSED",
+      "duration_ms": 13.93,
+      "details": {
+        "status_code": 403,
+        "detail": "Application 'totally_fabricated_nonexistent_binary.exe' is not in the approved application allowlist or approved workspace roots"
+      },
+      "error": null
+    },
+    {
+      "test_id": "B-03",
+      "category": "Windows Management",
+      "name": "Invalid Window Handle Rejection (HTTP 404)",
+      "suite_type": "Newly Tested",
+      "status": "PASSED",
+      "duration_ms": 14.96,
+      "details": {
+        "status_code": 404,
+        "detail": "Window not found matching criteria"
+      },
+      "error": null
+    },
+    {
+      "test_id": "B-04",
+      "category": "Windows Management",
+      "name": "Stale / Closed Window Handle Rejection (HTTP 404)",
+      "suite_type": "Newly Tested",
+      "status": "PASSED",
+      "duration_ms": 741.79,
+      "details": {
+        "status_code": 404,
+        "detail": "Window not found matching criteria"
+      },
+      "error": null
+    },
+    {
+      "test_id": "C-02",
+      "category": "UI Automation",
+      "name": "Deep UIA Inspection (Depth 10, Elements 150)",
+      "suite_type": "Newly Tested",
+      "status": "PASSED",
+      "duration_ms": 999.72,
+      "details": {
+        "status_code": 200,
+        "elements_found": 150,
+        "max_elements": 150
+      },
+      "error": null
+    },
+    {
+      "test_id": "H-04",
+      "category": "Post-Action Verification",
+      "name": "Positive Verification: 'window_title_contains' Substring Match",
+      "suite_type": "Newly Tested",
+      "status": "PASSED",
+      "duration_ms": 4.02,
+      "details": {
+        "status_code": 200,
+        "verified": true,
+        "summary": "Action 'focus_window' verification SUCCEEDED: 1/1 conditions satisfied."
+      },
+      "error": null
+    },
+    {
+      "test_id": "H-05",
+      "category": "Post-Action Verification",
+      "name": "Negative Verification: 'window_title_contains' Rejection",
+      "suite_type": "Newly Tested",
+      "status": "PASSED",
+      "duration_ms": 831.93,
+      "details": {
+        "status_code": 200,
+        "verified": false
+      },
+      "error": null
+    },
+    {
+      "test_id": "H-06",
+      "category": "Post-Action Verification",
+      "name": "Verification Condition: 'dialog_opened' Evaluation",
+      "suite_type": "Newly Tested",
+      "status": "PASSED",
+      "duration_ms": 625.78,
+      "details": {
+        "status_code": 200,
+        "verified": false,
+        "results": [
+          {
+            "check_type": "dialog_opened",
+            "passed": false,
+            "message": "Condition 'dialog_opened' timed out after 0.5s without satisfying criteria"
+          }
+        ]
+      },
+      "error": null
+    },
+    {
+      "test_id": "H-07",
+      "category": "Post-Action Verification",
+      "name": "Multiple Verification Conditions Conjoint Evaluation (2/2)",
+      "suite_type": "Newly Tested",
+      "status": "PASSED",
+      "duration_ms": 996.34,
+      "details": {
+        "status_code": 200,
+        "verified": true,
+        "conditions_count": 2
+      },
+      "error": null
+    },
+    {
+      "test_id": "H-08",
+      "category": "Post-Action Verification",
+      "name": "Screenshot Evidence Disk Persistence & Accessibility Verification",
+      "suite_type": "Newly Tested",
+      "status": "PASSED",
+      "duration_ms": 5.0,
+      "details": {
+        "file_path": "D:\\violet\\Neuro\\data\\evidence\\evidence_composite_action_20261119_142844_799964.jpg",
+        "file_exists": true,
+        "jpeg_valid": true,
+        "byte_size": 6269
+      },
+      "error": null
+    },
+    {
+      "test_id": "H-09",
+      "category": "Post-Action Verification",
+      "name": "Screenshot Evidence Optional / Graceful Handling",
+      "suite_type": "Newly Tested",
+      "status": "PASSED",
+      "duration_ms": 27.85,
+      "details": {
+        "status_code": 200,
+        "screenshot_evidence_omitted": true
+      },
+      "error": null
+    },
+    {
+      "test_id": "H-10",
+      "category": "Post-Action Verification",
+      "name": "Verification Across Diverse Open Windows (Multi-Target)",
+      "suite_type": "Newly Tested",
+      "status": "PASSED",
+      "duration_ms": 30.47,
+      "details": {
+        "verified_window_samples": [
+          "Create Personal AI A",
+          "New Tab - Google Chr"
+        ]
+      },
+      "error": null
+    },
+    {
+      "test_id": "I-05",
+      "category": "Device Pairing",
+      "name": "Invalid HMAC Signature Rejection (HTTP 401)",
+      "suite_type": "Newly Tested",
+      "status": "PASSED",
+      "duration_ms": 31.37,
+      "details": {
+        "status_code": 401,
+        "detail": "Invalid cryptographic signature"
+      },
+      "error": null
+    },
+    {
+      "test_id": "I-06",
+      "category": "Device Pairing",
+      "name": "Wrong Secret Key Pairing Rejection (HTTP 401)",
+      "suite_type": "Newly Tested",
+      "status": "PASSED",
+      "duration_ms": 32.32,
+      "details": {
+        "status_code": 401,
+        "detail": "Invalid cryptographic signature"
+      },
+      "error": null
+    },
+    {
+      "test_id": "I-07",
+      "category": "Device Pairing",
+      "name": "Cryptographic Challenge Replay Protection (HTTP 401 on Re-use)",
+      "suite_type": "Newly Tested",
+      "status": "PASSED",
+      "duration_ms": 44.75,
+      "details": {
+        "first_attempt_status": 200,
+        "second_replay_status": 401,
+        "detail": "Challenge expired, invalid, or already consumed"
+      },
+      "error": null
+    },
+    {
+      "test_id": "I-08",
+      "category": "Device Pairing",
+      "name": "Pairing Session Revocation Enforcement (Inactive on Query)",
+      "suite_type": "Newly Tested",
+      "status": "PASSED",
+      "duration_ms": 29.93,
+      "details": {
+        "status_code": 200,
+        "is_active": false
+      },
+      "error": null
+    },
+    {
+      "test_id": "J-05",
+      "category": "Emergency Stop",
+      "name": "Enforce Emergency Stop Blockade on /v1/input/click-element (HTTP 400)",
+      "suite_type": "Newly Tested",
+      "status": "PASSED",
+      "duration_ms": 391.03,
+      "details": {
+        "status_code": 400,
+        "detail": "Emergency stop is currently active. Desktop input blocked."
+      },
+      "error": null
+    },
+    {
+      "test_id": "J-06",
+      "category": "Emergency Stop",
+      "name": "Enforce Emergency Stop Blockade on /v1/input/keyboard (HTTP 400)",
+      "suite_type": "Newly Tested",
+      "status": "PASSED",
+      "duration_ms": 15.76,
+      "details": {
+        "status_code": 400,
+        "detail": "Emergency stop is currently active. Desktop input blocked."
+      },
+      "error": null
+    }
+  ]
+}
