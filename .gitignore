@@ -19,6 +19,17 @@ dist-ssr
 *.local
 supabase/.temp/
 
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.venv/
+.pytest_cache/
+apps/violet-local-agent/data/
+data/
+*.jsonl
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
@@ -29,3 +40,7 @@ supabase/.temp/
 *.njsproj
 *.sln
 *.sw?
+
+# VIOLET Multi-Agent Worktrees and Cache
+.violet/
+

@@ -1,0 +1,780 @@
+export interface LocalFileEntry {
+  name: string;
+  path: string;
+  kind: "directory" | "file";
+}
+
+export interface LocalAgentCapabilities {
+  device: string;
+  capabilities: string[];
+  approved_root_count: number;
+  named_commands: string[];
+  remote_pairing: boolean;
+  desktop_input: boolean;
+  browser_control: boolean;
+}
+
+export interface CommandExecutionResult {
+  command_id: string;
+  returncode: number;
+  stdout: string;
+  stderr: string;
+}
+
+export interface ScreenCaptureResult {
+  mimeType: string;
+  blobUrl?: string;
+  byteLength: number;
+  width?: number;
+  height?: number;
+  timestamp?: string;
+}
+
+export interface MonitorInfoEntry {
+  index: number;
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+  is_primary: boolean;
+}
+
+export interface DesktopInfoResponse {
+  monitors: MonitorInfoEntry[];
+  primary_monitor: MonitorInfoEntry;
+  virtual_screen_bounds: {
+    left: number;
+    top: number;
+    width: number;
+    height: number;
+  };
+  timestamp: string;
+}
+
+export interface WindowBoundsEntry {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+  right: number;
+  bottom: number;
+}
+
+export interface WindowInfoEntry {
+  handle: number;
+  title: string;
+  process_id: number;
+  process_name: string;
+  class_name?: string;
+  bounds: WindowBoundsEntry;
+  is_minimized: boolean;
+  is_maximized: boolean;
+  is_active: boolean;
+}
+
+export interface FocusWindowResponse {
+  success: boolean;
+  window?: WindowInfoEntry;
+  message: string;
+}
+
+export interface UIElementBoundsEntry {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+  right: number;
+  bottom: number;
+}
+
+export interface UIElementEntry {
+  element_id: string;
+  name: string;
+  control_type: string;
+  class_name: string;
+  automation_id: string;
+  bounds?: UIElementBoundsEntry | null;
+  enabled: boolean;
+  visible: boolean;
+  children_count: number;
+  source: string;
+}
+
+export interface InspectWindowUIResponse {
+  window_title: string;
+  handle: number;
+  process_id: number;
+  element_count: number;
+  elements: UIElementEntry[];
+}
+
+export interface MouseActionRequest {
+  action: "move" | "click" | "double_click" | "right_click" | "middle_click" | "scroll" | "drag";
+  x?: number;
+  y?: number;
+  target_x?: number;
+  target_y?: number;
+  button?: "left" | "middle" | "right";
+  clicks?: number;
+  scroll_amount?: number;
+  smooth?: boolean;
+  require_in_bounds?: boolean;
+}
+
+export interface KeyboardActionRequest {
+  action: "type" | "press" | "hotkey";
+  text?: string;
+  key?: string;
+  keys?: string[];
+  interval_ms?: number;
+}
+
+export interface ElementClickRequest {
+  window_handle?: number;
+  process_id?: number;
+  automation_id?: string;
+  element_name?: string;
+  control_type?: string;
+  click_type?: "left" | "double" | "right";
+}
+
+export interface InputActionResult {
+  success: boolean;
+  action_type: string;
+  details: Record<string, unknown>;
+  executed_at: string;
+  error?: string | null;
+}
+
+export interface ProcessEntry {
+  pid: number;
+  name: string;
+  exe?: string | null;
+  cpu_percent?: number | null;
+  memory_mb?: number | null;
+  status: string;
+  create_time: string;
+  username?: string | null;
+}
+
+export interface ProcessListResponse {
+  processes: ProcessEntry[];
+  count: number;
+}
+
+export interface LaunchAppRequest {
+  app_name: string;
+  args?: string[];
+  working_dir?: string;
+}
+
+export interface LaunchAppResponse {
+  success: boolean;
+  pid?: number | null;
+  app_name: string;
+  executable: string;
+  message: string;
+}
+
+export interface TerminateProcessRequest {
+  pid: number;
+  force?: boolean;
+  reason?: string;
+}
+
+export interface TerminateProcessResponse {
+  success: boolean;
+  pid: number;
+  message: string;
+}
+
+export interface GroundedElement {
+  element_id: string;
+  name: string;
+  control_type: string;
+  automation_id: string;
+  pixel_bounds: {
+    left: number;
+    top: number;
+    right: number;
+    bottom: number;
+    width: number;
+    height: number;
+  };
+  normalized_bounds: {
+    left: number;
+    top: number;
+    right: number;
+    bottom: number;
+    width: number;
+    height: number;
+  };
+  center_pixel: { x: number; y: number };
+  center_normalized: { x: number; y: number };
+  enabled: boolean;
+  visible: boolean;
+}
+
+export interface VisualGroundingResponse {
+  window_title: string;
+  window_handle: number;
+  screen_width: number;
+  screen_height: number;
+  element_count: number;
+  elements: GroundedElement[];
+  timestamp: string;
+}
+
+export interface VerificationCondition {
+  check_type: "window_exists" | "window_title_contains" | "element_visible" | "dialog_opened";
+  window_handle?: number;
+  window_title?: string;
+  expected_title?: string;
+  expected_element_name?: string;
+  expected_automation_id?: string;
+  control_type?: string;
+  max_depth?: number;
+  max_elements?: number;
+  timeout_seconds?: number;
+}
+
+export interface PostActionVerificationRequest {
+  action_type: string;
+  target_window_handle?: number;
+  target_window_title?: string;
+  conditions: VerificationCondition[];
+  capture_screenshot_evidence?: boolean;
+}
+
+export interface VerificationResult {
+  verified: boolean;
+  action_type: string;
+  condition_results: Array<{
+    check_type: string;
+    passed: boolean;
+    message: string;
+  }>;
+  screenshot_evidence?: {
+    timestamp: string;
+    width: number;
+    height: number;
+    byte_size: number;
+    format: string;
+  } | null;
+  evidence_summary: string;
+  verified_at: string;
+}
+
+export interface PairingChallengeRequest {
+  device_id: string;
+  device_name?: string;
+  client_info?: Record<string, unknown>;
+}
+
+export interface PairingChallengeResponse {
+  challenge_id: string;
+  nonce: string;
+  server_id: string;
+  expires_at: string;
+}
+
+export interface PairingVerifyRequest {
+  challenge_id: string;
+  device_id: string;
+  signature: string;
+}
+
+export interface PairingVerifyResponse {
+  success: boolean;
+  session_token?: string | null;
+  device_id: string;
+  expires_at: string;
+  message: string;
+}
+
+export interface SessionHeartbeatResponse {
+  active: boolean;
+  device_id?: string | null;
+  time_remaining_seconds: number;
+  paired_at?: string | null;
+  message: string;
+}
+
+export interface EmergencyStopStatus {
+  is_stopped: boolean;
+  triggered_at?: string | null;
+  reason?: string | null;
+}
+
+export interface EmergencyStopResponse {
+  success: boolean;
+  is_stopped: boolean;
+  message: string;
+  reason?: string;
+  triggered_at?: string;
+}
+
+export class VioletLocalAgentClient {
+  private readonly baseUrl: string;
+  private readonly token: string;
+  private readonly fetchImpl: typeof fetch;
+
+  constructor(options?: { baseUrl?: string; token?: string; fetchImpl?: typeof fetch }) {
+    this.baseUrl = (options?.baseUrl || "http://127.0.0.1:8765").replace(/\/+$/, "");
+    this.token = options?.token || "";
+    this.fetchImpl = options?.fetchImpl || (typeof fetch !== "undefined" ? fetch.bind(globalThis) : (undefined as unknown as typeof fetch));
+  }
+
+  private getHeaders(contentType?: string): Record<string, string> {
+    const headers: Record<string, string> = {};
+    if (this.token) {
+      headers["Authorization"] = `Bearer ${this.token}`;
+    }
+    if (contentType) {
+      headers["Content-Type"] = contentType;
+    }
+    return headers;
+  }
+
+  async health(): Promise<{ online: boolean; version?: string; error?: string }> {
+    try {
+      const res = await this.fetchImpl(`${this.baseUrl}/health`, {
+        method: "GET",
+        headers: { Accept: "application/json" },
+        signal: AbortSignal.timeout(3000),
+      });
+      if (!res.ok) {
+        return { online: false, error: `HTTP ${res.status}: ${res.statusText}` };
+      }
+      const data = (await res.json()) as { status: string; version: string; service: string };
+      return { online: data.status === "ok", version: data.version };
+    } catch (err) {
+      return {
+        online: false,
+        error: err instanceof Error ? err.message : "Failed to connect to local agent",
+      };
+    }
+  }
+
+  async getCapabilities(): Promise<LocalAgentCapabilities> {
+    const res = await this.fetchImpl(`${this.baseUrl}/v1/capabilities`, {
+      method: "GET",
+      headers: this.getHeaders("application/json"),
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!res.ok) {
+      throw new Error(`Local agent capabilities error (${res.status}): ${await res.text()}`);
+    }
+    return res.json() as Promise<LocalAgentCapabilities>;
+  }
+
+  async getDesktopInfo(): Promise<DesktopInfoResponse> {
+    const res = await this.fetchImpl(`${this.baseUrl}/v1/desktop/info`, {
+      method: "GET",
+      headers: this.getHeaders("application/json"),
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!res.ok) {
+      throw new Error(`Local agent desktopInfo error (${res.status}): ${await res.text()}`);
+    }
+    return res.json() as Promise<DesktopInfoResponse>;
+  }
+
+  async captureScreen(options?: {
+    monitor?: number;
+    maxDimension?: number;
+    quality?: number;
+  }): Promise<ScreenCaptureResult> {
+    const params = new URLSearchParams();
+    if (options?.monitor !== undefined) params.set("monitor", String(options.monitor));
+    if (options?.maxDimension !== undefined) params.set("max_dimension", String(options.maxDimension));
+    if (options?.quality !== undefined) params.set("quality", String(options.quality));
+
+    const url = `${this.baseUrl}/v1/desktop/screenshot${params.toString() ? "?" + params.toString() : ""}`;
+    const res = await this.fetchImpl(url, {
+      method: "GET",
+      headers: this.getHeaders(),
+      signal: AbortSignal.timeout(12000),
+    });
+    if (!res.ok) {
+      throw new Error(`Local agent captureScreen error (${res.status}): ${await res.text()}`);
+    }
+
+    const width = parseInt(res.headers.get("X-Capture-Width") || "0", 10) || undefined;
+    const height = parseInt(res.headers.get("X-Capture-Height") || "0", 10) || undefined;
+    const timestamp = res.headers.get("X-Capture-Timestamp") || undefined;
+
+    const blob = await res.blob();
+    const blobUrl = typeof URL !== "undefined" && typeof URL.createObjectURL === "function"
+      ? URL.createObjectURL(blob)
+      : undefined;
+
+    return {
+      mimeType: "image/jpeg",
+      blobUrl,
+      byteLength: blob.size,
+      width,
+      height,
+      timestamp,
+    };
+  }
+
+  async captureRegion(region: {
+    left: number;
+    top: number;
+    width: number;
+    height: number;
+    maxDimension?: number;
+    quality?: number;
+  }): Promise<ScreenCaptureResult> {
+    const params = new URLSearchParams();
+    if (region.quality !== undefined) params.set("quality", String(region.quality));
+
+    const url = `${this.baseUrl}/v1/desktop/screenshot/region${params.toString() ? "?" + params.toString() : ""}`;
+    const res = await this.fetchImpl(url, {
+      method: "POST",
+      headers: this.getHeaders("application/json"),
+      body: JSON.stringify({
+        left: region.left,
+        top: region.top,
+        width: region.width,
+        height: region.height,
+        max_dimension: region.maxDimension,
+      }),
+      signal: AbortSignal.timeout(12000),
+    });
+    if (!res.ok) {
+      throw new Error(`Local agent captureRegion error (${res.status}): ${await res.text()}`);
+    }
+
+    const width = parseInt(res.headers.get("X-Capture-Width") || "0", 10) || undefined;
+    const height = parseInt(res.headers.get("X-Capture-Height") || "0", 10) || undefined;
+    const timestamp = res.headers.get("X-Capture-Timestamp") || undefined;
+
+    const blob = await res.blob();
+    const blobUrl = typeof URL !== "undefined" && typeof URL.createObjectURL === "function"
+      ? URL.createObjectURL(blob)
+      : undefined;
+
+    return {
+      mimeType: "image/jpeg",
+      blobUrl,
+      byteLength: blob.size,
+      width,
+      height,
+      timestamp,
+    };
+  }
+
+  async listWindows(options?: { includeMinimized?: boolean }): Promise<{ windows: WindowInfoEntry[]; count: number }> {
+    const params = new URLSearchParams();
+    if (options?.includeMinimized !== undefined) {
+      params.set("include_minimized", String(options.includeMinimized));
+    }
+    const url = `${this.baseUrl}/v1/windows/list${params.toString() ? "?" + params.toString() : ""}`;
+    const res = await this.fetchImpl(url, {
+      method: "GET",
+      headers: this.getHeaders("application/json"),
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!res.ok) {
+      throw new Error(`Local agent listWindows error (${res.status}): ${await res.text()}`);
+    }
+    return res.json() as Promise<{ windows: WindowInfoEntry[]; count: number }>;
+  }
+
+  async focusWindow(request: {
+    handle?: number;
+    title?: string;
+    process_name?: string;
+  }): Promise<FocusWindowResponse> {
+    const res = await this.fetchImpl(`${this.baseUrl}/v1/windows/focus`, {
+      method: "POST",
+      headers: this.getHeaders("application/json"),
+      body: JSON.stringify(request),
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!res.ok) {
+      throw new Error(`Local agent focusWindow error (${res.status}): ${await res.text()}`);
+    }
+    return res.json() as Promise<FocusWindowResponse>;
+  }
+
+  async inspectWindowUI(request?: {
+    handle?: number;
+    title?: string;
+    max_depth?: number;
+    max_elements?: number;
+  }): Promise<InspectWindowUIResponse> {
+    const res = await this.fetchImpl(`${this.baseUrl}/v1/ui/inspect`, {
+      method: "POST",
+      headers: this.getHeaders("application/json"),
+      body: JSON.stringify(request || {}),
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!res.ok) {
+      throw new Error(`Local agent inspectWindowUI error (${res.status}): ${await res.text()}`);
+    }
+    return res.json() as Promise<InspectWindowUIResponse>;
+  }
+
+  async listFiles(path: string): Promise<LocalFileEntry[]> {
+    const params = new URLSearchParams({ path });
+    const res = await this.fetchImpl(`${this.baseUrl}/v1/files/list?${params.toString()}`, {
+      method: "GET",
+      headers: this.getHeaders("application/json"),
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!res.ok) {
+      throw new Error(`Local agent listFiles error (${res.status}): ${await res.text()}`);
+    }
+    const data = (await res.json()) as { items: LocalFileEntry[] };
+    return data.items;
+  }
+
+  async readTextFile(path: string): Promise<string> {
+    const params = new URLSearchParams({ path });
+    const res = await this.fetchImpl(`${this.baseUrl}/v1/files/read-text?${params.toString()}`, {
+      method: "GET",
+      headers: this.getHeaders("application/json"),
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!res.ok) {
+      throw new Error(`Local agent readTextFile error (${res.status}): ${await res.text()}`);
+    }
+    const data = (await res.json()) as { path: string; content: string };
+    return data.content;
+  }
+
+  async createTextFile(path: string, content: string): Promise<{ created: boolean; path: string }> {
+    const res = await this.fetchImpl(`${this.baseUrl}/v1/files/create-text`, {
+      method: "POST",
+      headers: this.getHeaders("application/json"),
+      body: JSON.stringify({ path, content }),
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!res.ok) {
+      throw new Error(`Local agent createTextFile error (${res.status}): ${await res.text()}`);
+    }
+    return res.json() as Promise<{ created: boolean; path: string }>;
+  }
+
+  async runNamedCommand(commandId: string): Promise<CommandExecutionResult> {
+    const res = await this.fetchImpl(`${this.baseUrl}/v1/commands/run`, {
+      method: "POST",
+      headers: this.getHeaders("application/json"),
+      body: JSON.stringify({ command_id: commandId }),
+      signal: AbortSignal.timeout(30000),
+    });
+    if (!res.ok) {
+      throw new Error(`Local agent command error (${res.status}): ${await res.text()}`);
+    }
+    return res.json() as Promise<CommandExecutionResult>;
+  }
+
+  async executeMouseAction(request: MouseActionRequest): Promise<InputActionResult> {
+    const res = await this.fetchImpl(`${this.baseUrl}/v1/input/mouse`, {
+      method: "POST",
+      headers: this.getHeaders("application/json"),
+      body: JSON.stringify(request),
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!res.ok) {
+      throw new Error(`Local agent mouseAction error (${res.status}): ${await res.text()}`);
+    }
+    return res.json() as Promise<InputActionResult>;
+  }
+
+  async executeKeyboardAction(request: KeyboardActionRequest): Promise<InputActionResult> {
+    const res = await this.fetchImpl(`${this.baseUrl}/v1/input/keyboard`, {
+      method: "POST",
+      headers: this.getHeaders("application/json"),
+      body: JSON.stringify(request),
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!res.ok) {
+      throw new Error(`Local agent keyboardAction error (${res.status}): ${await res.text()}`);
+    }
+    return res.json() as Promise<InputActionResult>;
+  }
+
+  async clickElement(request: ElementClickRequest): Promise<InputActionResult> {
+    const res = await this.fetchImpl(`${this.baseUrl}/v1/input/click-element`, {
+      method: "POST",
+      headers: this.getHeaders("application/json"),
+      body: JSON.stringify(request),
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!res.ok) {
+      throw new Error(`Local agent clickElement error (${res.status}): ${await res.text()}`);
+    }
+    return res.json() as Promise<InputActionResult>;
+  }
+
+  async listProcesses(options?: {
+    limit?: number;
+    filter_name?: string;
+  }): Promise<ProcessListResponse> {
+    const params = new URLSearchParams();
+    if (options?.limit !== undefined) params.set("limit", String(options.limit));
+    if (options?.filter_name !== undefined) params.set("filter_name", options.filter_name);
+
+    const url = `${this.baseUrl}/v1/processes/list${params.toString() ? "?" + params.toString() : ""}`;
+    const res = await this.fetchImpl(url, {
+      method: "GET",
+      headers: this.getHeaders("application/json"),
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!res.ok) {
+      throw new Error(`Local agent listProcesses error (${res.status}): ${await res.text()}`);
+    }
+    return res.json() as Promise<ProcessListResponse>;
+  }
+
+  async launchApp(request: LaunchAppRequest): Promise<LaunchAppResponse> {
+    const res = await this.fetchImpl(`${this.baseUrl}/v1/applications/launch`, {
+      method: "POST",
+      headers: this.getHeaders("application/json"),
+      body: JSON.stringify(request),
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!res.ok) {
+      throw new Error(`Local agent launchApp error (${res.status}): ${await res.text()}`);
+    }
+    return res.json() as Promise<LaunchAppResponse>;
+  }
+
+  async terminateProcess(request: TerminateProcessRequest): Promise<TerminateProcessResponse> {
+    const res = await this.fetchImpl(`${this.baseUrl}/v1/processes/terminate`, {
+      method: "POST",
+      headers: this.getHeaders("application/json"),
+      body: JSON.stringify(request),
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!res.ok) {
+      throw new Error(`Local agent terminateProcess error (${res.status}): ${await res.text()}`);
+    }
+    return res.json() as Promise<TerminateProcessResponse>;
+  }
+
+  async groundWindowElements(request?: {
+    handle?: number;
+    title?: string;
+    max_depth?: number;
+    max_elements?: number;
+  }): Promise<VisualGroundingResponse> {
+    const res = await this.fetchImpl(`${this.baseUrl}/v1/grounding/elements`, {
+      method: "POST",
+      headers: this.getHeaders("application/json"),
+      body: JSON.stringify(request || {}),
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!res.ok) {
+      throw new Error(`Local agent groundWindowElements error (${res.status}): ${await res.text()}`);
+    }
+    return res.json() as Promise<VisualGroundingResponse>;
+  }
+
+  async verifyActionOutcome(request: PostActionVerificationRequest): Promise<VerificationResult> {
+    const res = await this.fetchImpl(`${this.baseUrl}/v1/verification/verify`, {
+      method: "POST",
+      headers: this.getHeaders("application/json"),
+      body: JSON.stringify(request),
+      signal: AbortSignal.timeout(35000),
+    });
+    if (!res.ok) {
+      throw new Error(`Local agent verifyActionOutcome error (${res.status}): ${await res.text()}`);
+    }
+    return res.json() as Promise<VerificationResult>;
+  }
+
+  async requestPairingChallenge(request: PairingChallengeRequest): Promise<PairingChallengeResponse> {
+    const res = await this.fetchImpl(`${this.baseUrl}/v1/pairing/challenge`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(request),
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!res.ok) {
+      throw new Error(`Local agent requestPairingChallenge error (${res.status}): ${await res.text()}`);
+    }
+    return res.json() as Promise<PairingChallengeResponse>;
+  }
+
+  async verifyPairingChallenge(request: PairingVerifyRequest): Promise<PairingVerifyResponse> {
+    const res = await this.fetchImpl(`${this.baseUrl}/v1/pairing/verify`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(request),
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!res.ok) {
+      throw new Error(`Local agent verifyPairingChallenge error (${res.status}): ${await res.text()}`);
+    }
+    return res.json() as Promise<PairingVerifyResponse>;
+  }
+
+  async checkPairingSession(sessionToken?: string): Promise<SessionHeartbeatResponse> {
+    const token = sessionToken || this.token;
+    const res = await this.fetchImpl(`${this.baseUrl}/v1/pairing/session`, {
+      method: "GET",
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!res.ok) {
+      throw new Error(`Local agent checkPairingSession error (${res.status}): ${await res.text()}`);
+    }
+    return res.json() as Promise<SessionHeartbeatResponse>;
+  }
+
+  async revokePairingSession(sessionToken: string): Promise<{ revoked: boolean; message: string }> {
+    const params = new URLSearchParams({ session_token: sessionToken });
+    const res = await this.fetchImpl(`${this.baseUrl}/v1/pairing/revoke?${params.toString()}`, {
+      method: "POST",
+      headers: this.getHeaders("application/json"),
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!res.ok) {
+      throw new Error(`Local agent revokePairingSession error (${res.status}): ${await res.text()}`);
+    }
+    return res.json() as Promise<{ revoked: boolean; message: string }>;
+  }
+
+  async triggerEmergencyStop(reason?: string): Promise<EmergencyStopResponse> {
+    const params = new URLSearchParams();
+    if (reason) params.set("reason", reason);
+    const res = await this.fetchImpl(`${this.baseUrl}/v1/emergency-stop/trigger${params.toString() ? "?" + params.toString() : ""}`, {
+      method: "POST",
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!res.ok) {
+      throw new Error(`Local agent triggerEmergencyStop error (${res.status}): ${await res.text()}`);
+    }
+    return res.json() as Promise<EmergencyStopResponse>;
+  }
+
+  async resumeEmergencyStop(): Promise<EmergencyStopResponse> {
+    const res = await this.fetchImpl(`${this.baseUrl}/v1/emergency-stop/resume`, {
+      method: "POST",
+      headers: this.getHeaders("application/json"),
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!res.ok) {
+      throw new Error(`Local agent resumeEmergencyStop error (${res.status}): ${await res.text()}`);
+    }
+    return res.json() as Promise<EmergencyStopResponse>;
+  }
+
+  async getEmergencyStopStatus(): Promise<EmergencyStopStatus> {
+    const res = await this.fetchImpl(`${this.baseUrl}/v1/emergency-stop/status`, {
+      method: "GET",
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!res.ok) {
+      throw new Error(`Local agent getEmergencyStopStatus error (${res.status}): ${await res.text()}`);
+    }
+    return res.json() as Promise<EmergencyStopStatus>;
+  }
+}

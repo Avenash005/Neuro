@@ -1,0 +1,841 @@
+Total Tables Parsed: 39
+
+====================================================
+TABLE: action_items (Created in: 20260720000700_action_items.sql)
+====================================================
+id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  memory_id uuid not null references public.memories(id) on delete cascade,
+  title text not null check (char_length(btrim(title)) between 1 and 180),
+  normalized_title text not null check (char_length(btrim(normalized_title)) between 1 and 180),
+  description text not null default '' check (char_length(description) <= 600),
+  item_type text not null default 'task' check (item_type in ('task', 'reminder')),
+  status text not null default 'suggested' check (status in ('suggested', 'accepted', 'completed', 'dismissed')),
+  due_at timestamptz,
+  confidence real not null default 0.7 check (confidence between 0 and 1),
+  evidence text not null default '' check (char_length(evidence) <= 300),
+  completed_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (memory_id, normalized_title)
+
+ALTER STATEMENTS:
+  [20260720000700_action_items.sql] ALTER TABLE action_items enable row level security;
+
+
+====================================================
+TABLE: agent_approvals (Created in: 20261118000100_violet_agent_control_plane.sql)
+====================================================
+id uuid primary key default gen_random_uuid(),
+  task_id uuid not null references public.agent_tasks(id) on delete cascade,
+  step_id uuid not null references public.agent_task_steps(id) on delete cascade,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  operation text not null check (char_length(btrim(operation)) between 1 and 160),
+  consequence text not null check (char_length(btrim(consequence)) between 1 and 1000),
+  arguments_hash text not null check (arguments_hash ~ '^[a-f0-9]{64}$'),
+  arguments_preview jsonb not null default '{}'::jsonb check (jsonb_typeof(arguments_preview) = 'object'),
+  status text not null default 'pending' check (status in ('pending', 'approved', 'rejected', 'expired', 'consumed')),
+  expires_at timestamptz not null,
+  decided_at timestamptz,
+  consumed_at timestamptz,
+  created_at timestamptz not null default now()
+
+ALTER STATEMENTS:
+  [20261118000100_violet_agent_control_plane.sql] ALTER TABLE agent_approvals enable row level security;
+
+
+====================================================
+TABLE: agent_artifacts (Created in: 20261121000100_violet_multi_agent_system.sql)
+====================================================
+id uuid primary key default gen_random_uuid(),
+  task_id uuid not null references public.agent_tasks(id) on delete cascade,
+  run_id uuid references public.agent_runs(id) on delete cascade,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  agent_role text not null,
+  artifact_type text not null check (artifact_type in ('plan', 'diff', 'test_report', 'review', 'code')),
+  file_path text,
+  content text not null,
+  metadata jsonb not null default '{}'::jsonb check (jsonb_typeof(metadata) = 'object'),
+  created_at timestamptz not null default now()
+
+ALTER STATEMENTS:
+  [20261121000100_violet_multi_agent_system.sql] ALTER TABLE agent_artifacts enable row level security;
+
+
+====================================================
+TABLE: agent_commits (Created in: 20261121000100_violet_multi_agent_system.sql)
+====================================================
+id uuid primary key default gen_random_uuid(),
+  task_id uuid not null references public.agent_tasks(id) on delete cascade,
+  run_id uuid references public.agent_runs(id) on delete cascade,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  agent_role text not null,
+  branch_name text not null,
+  worktree_path text,
+  commit_sha text not null check (commit_sha ~ '^[a-f0-9]{7,40}$'),
+  commit_message text not null,
+  files_changed jsonb not null default '[]'::jsonb check (jsonb_typeof(files_changed) = 'array'),
+  insertions integer not null default 0 check (insertions >= 0),
+  deletions integer not null default 0 check (deletions >= 0),
+  created_at timestamptz not null default now()
+
+ALTER STATEMENTS:
+  [20261121000100_violet_multi_agent_system.sql] ALTER TABLE agent_commits enable row level security;
+
+
+====================================================
+TABLE: agent_devices (Created in: 20261118000100_violet_agent_control_plane.sql)
+====================================================
+id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  name text not null check (char_length(btrim(name)) between 1 and 120),
+  platform text not null check (platform in ('windows', 'macos', 'linux')),
+  public_key_fingerprint text not null check (char_length(public_key_fingerprint) between 32 and 160),
+  scopes text[] not null default '{}',
+  last_seen_at timestamptz,
+  revoked_at timestamptz,
+  created_at timestamptz not null default now(),
+  unique (user_id, public_key_fingerprint)
+
+ALTER STATEMENTS:
+  [20261118000100_violet_agent_control_plane.sql] ALTER TABLE agent_devices enable row level security;
+
+
+====================================================
+TABLE: agent_events (Created in: 20261121000100_violet_multi_agent_system.sql)
+====================================================
+id uuid primary key default gen_random_uuid(),
+  task_id uuid not null references public.agent_tasks(id) on delete cascade,
+  run_id uuid references public.agent_runs(id) on delete cascade,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  agent_role text not null check (agent_role in ('orchestrator', 'architect', 'developer', 'reviewer')),
+  event_type text not null check (char_length(btrim(event_type)) between 1 and 80),
+  message text not null,
+  details jsonb not null default '{}'::jsonb check (jsonb_typeof(details) = 'object'),
+  created_at timestamptz not null default now()
+
+ALTER STATEMENTS:
+  [20261121000100_violet_multi_agent_system.sql] ALTER TABLE agent_events enable row level security;
+
+
+====================================================
+TABLE: agent_handoffs (Created in: 20261118000100_violet_agent_control_plane.sql)
+====================================================
+id uuid primary key default gen_random_uuid(),
+  task_id uuid not null references public.agent_tasks(id) on delete cascade,
+  step_id uuid references public.agent_task_steps(id) on delete set null,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  reason text not null
+    check (reason in ('captcha', 'otp', 'mfa', 'permission', 'consent', 'ambiguous_state', 'manual_takeover')),
+  instructions text not null check (char_length(btrim(instructions)) between 1 and 1500),
+  visible_client text not null check (visible_client in ('browser', 'desktop')),
+  status text not null default 'waiting' check (status in ('waiting', 'resumed', 'cancelled', 'timed_out')),
+  created_at timestamptz not null default now(),
+  resumed_at timestamptz,
+  expires_at timestamptz
+
+ALTER STATEMENTS:
+  [20261118000100_violet_agent_control_plane.sql] ALTER TABLE agent_handoffs enable row level security;
+
+
+====================================================
+TABLE: agent_issues (Created in: 20261121000500_violet_issue_intelligence.sql)
+====================================================
+id text primary key,
+  fingerprint text not null,
+  title text not null,
+  description text not null default '',
+  severity text not null check (severity in ('critical', 'high', 'medium', 'low', 'info')),
+  priority text not null check (priority in ('p0', 'p1', 'p2', 'p3')),
+  category text not null check (category in (
+    'runtime_error', 'model_provider', 'ollama_connection', 'command_failure',
+    'typescript_error', 'test_failure', 'build_failure', 'security_vulnerability',
+    'review_finding', 'task_dependency', 'worker_crash', 'timeout'
+  )),
+  error_message text not null,
+  stack_trace text,
+  source_file text,
+  line_number integer,
+  detected_at timestamptz not null default now(),
+  discovering_agent text not null,
+  assigned_agent text,
+  assigned_role text not null check (assigned_role in (
+    'frontend', 'backend', 'database', 'qa', 'security', 'devops', 'architect', 'developer', 'reviewer'
+  )),
+  task_id text references public.agent_tasks(id) on delete set null,
+  run_id text references public.agent_runs(id) on delete set null,
+  worktree_branch text,
+  worktree_path text,
+  root_cause text,
+  proposed_resolution text,
+  status text not null default 'open' check (status in ('open', 'in_progress', 'resolved', 'closed', 'reopened', 'blocked')),
+  is_transient boolean not null default false,
+  retry_count integer not null default 0,
+  max_retries integer not null default 3,
+  resolution_commit_sha text,
+  resolution_commit_message text,
+  verification_results jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+
+ALTER STATEMENTS:
+  [20261121000500_violet_issue_intelligence.sql] ALTER TABLE agent_issues enable row level security;
+
+
+====================================================
+TABLE: agent_messages (Created in: 20261121000300_violet_autonomous_engineering_intelligence.sql)
+====================================================
+id uuid primary key default gen_random_uuid(),
+  task_id uuid not null references public.agent_tasks(id) on delete cascade,
+  run_id uuid references public.agent_runs(id) on delete cascade,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  from_role text not null check (from_role in ('orchestrator', 'architect', 'developer', 'reviewer')),
+  to_role text not null check (to_role in ('orchestrator', 'architect', 'developer', 'reviewer', 'all')),
+  message_type text not null check (message_type in (
+    'PLAN_PROPOSAL',
+    'CHALLENGE_PLAN',
+    'PLAN_ACCEPTED',
+    'REQUEST_ASSISTANCE',
+    'ASSISTANCE_RESPONSE',
+    'CODE_QUESTION',
+    'REVIEW_FEEDBACK',
+    'STATUS_UPDATE'
+  )),
+  content text not null,
+  payload jsonb not null default '{}'::jsonb check (jsonb_typeof(payload) = 'object'),
+  created_at timestamptz not null default now()
+
+ALTER STATEMENTS:
+  [20261121000300_violet_autonomous_engineering_intelligence.sql] ALTER TABLE agent_messages enable row level security;
+
+
+====================================================
+TABLE: agent_reviews (Created in: 20261121000100_violet_multi_agent_system.sql)
+====================================================
+id uuid primary key default gen_random_uuid(),
+  task_id uuid not null references public.agent_tasks(id) on delete cascade,
+  run_id uuid references public.agent_runs(id) on delete cascade,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  reviewer_agent_role text not null default 'reviewer',
+  commit_sha text,
+  verdict text not null check (verdict in ('approved', 'changes_requested', 'rejected')),
+  review_notes text not null,
+  automated_checks jsonb not null default '{}'::jsonb check (jsonb_typeof(automated_checks) = 'object'),
+  test_results jsonb not null default '{}'::jsonb check (jsonb_typeof(test_results) = 'object'),
+  created_at timestamptz not null default now()
+
+ALTER STATEMENTS:
+  [20261121000100_violet_multi_agent_system.sql] ALTER TABLE agent_reviews enable row level security;
+
+
+====================================================
+TABLE: agent_runs (Created in: 20261121000100_violet_multi_agent_system.sql)
+====================================================
+id uuid primary key default gen_random_uuid(),
+  task_id uuid not null references public.agent_tasks(id) on delete cascade,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  run_number integer not null default 1 check (run_number > 0),
+  status text not null default 'queued'
+    check (status in ('queued', 'planning', 'implementing', 'reviewing', 'testing', 'completed', 'failed', 'cancelled')),
+  active_agents jsonb not null default '[]'::jsonb check (jsonb_typeof(active_agents) = 'array'),
+  architect_model text,
+  developer_model text,
+  reviewer_model text,
+  base_branch text not null default 'main',
+  integration_branch text,
+  started_at timestamptz,
+  completed_at timestamptz,
+  error_summary text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+
+ALTER STATEMENTS:
+  [20261121000100_violet_multi_agent_system.sql] ALTER TABLE agent_runs enable row level security;
+
+
+====================================================
+TABLE: agent_subtasks (Created in: 20261121000300_violet_autonomous_engineering_intelligence.sql)
+====================================================
+id uuid primary key default gen_random_uuid(),
+  task_id uuid not null references public.agent_tasks(id) on delete cascade,
+  run_id uuid references public.agent_runs(id) on delete cascade,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  title text not null,
+  description text not null,
+  assigned_role text not null check (assigned_role in ('architect', 'developer', 'reviewer')),
+  assigned_model text,
+  status text not null default 'pending'
+    check (status in ('pending', 'running', 'completed', 'failed', 'blocked')),
+  dependencies jsonb not null default '[]'::jsonb check (jsonb_typeof(dependencies) = 'array'),
+  target_files jsonb not null default '[]'::jsonb check (jsonb_typeof(target_files) = 'array'),
+  result_summary text,
+  started_at timestamptz,
+  completed_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+
+ALTER STATEMENTS:
+  [20261121000300_violet_autonomous_engineering_intelligence.sql] ALTER TABLE agent_subtasks enable row level security;
+
+
+====================================================
+TABLE: agent_task_events (Created in: 20261118000100_violet_agent_control_plane.sql)
+====================================================
+id uuid primary key default gen_random_uuid(),
+  task_id uuid not null references public.agent_tasks(id) on delete cascade,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  event_type text not null check (char_length(btrim(event_type)) between 1 and 80),
+  summary text not null check (char_length(btrim(summary)) between 1 and 1000),
+  details jsonb not null default '{}'::jsonb check (jsonb_typeof(details) = 'object'),
+  created_at timestamptz not null default now()
+
+ALTER STATEMENTS:
+  [20261118000100_violet_agent_control_plane.sql] ALTER TABLE agent_task_events enable row level security;
+
+
+====================================================
+TABLE: agent_task_steps (Created in: 20261118000100_violet_agent_control_plane.sql)
+====================================================
+id uuid primary key default gen_random_uuid(),
+  task_id uuid not null references public.agent_tasks(id) on delete cascade,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  step_order integer not null check (step_order >= 0),
+  title text not null check (char_length(btrim(title)) between 1 and 240),
+  tool_name text not null check (char_length(btrim(tool_name)) between 1 and 120),
+  risk text not null check (risk in ('read_only', 'reversible', 'external_side_effect', 'destructive', 'financial')),
+  status text not null default 'pending'
+    check (status in ('pending', 'awaiting_approval', 'running', 'completed', 'failed', 'skipped')),
+  arguments_hash text check (arguments_hash is null or arguments_hash ~ '^[a-f0-9]{64}$'),
+  arguments_preview jsonb not null default '{}'::jsonb check (jsonb_typeof(arguments_preview) = 'object'),
+  result_summary text check (result_summary is null or char_length(result_summary) <= 2000),
+  evidence jsonb not null default '[]'::jsonb check (jsonb_typeof(evidence) = 'array'),
+  error_code text,
+  created_at timestamptz not null default now(),
+  started_at timestamptz,
+  completed_at timestamptz,
+  unique (task_id, step_order)
+
+ALTER STATEMENTS:
+  [20261118000100_violet_agent_control_plane.sql] ALTER TABLE agent_task_steps enable row level security;
+
+
+====================================================
+TABLE: agent_tasks (Created in: 20261118000100_violet_agent_control_plane.sql)
+====================================================
+id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  goal text not null check (char_length(btrim(goal)) between 1 and 4000),
+  source text not null default 'web'
+    check (source in ('desktop', 'web', 'mobile', 'voice', 'messaging')),
+  status text not null default 'requested'
+    check (status in ('requested', 'classified', 'planned', 'awaiting_approval', 'queued',
+                      'running', 'awaiting_human', 'validating', 'completed', 'failed', 'cancelled')),
+  plan jsonb not null default '[]'::jsonb check (jsonb_typeof(plan) = 'array'),
+  constraints jsonb not null default '{}'::jsonb check (jsonb_typeof(constraints) = 'object'),
+  execution_budget jsonb not null default '{}'::jsonb check (jsonb_typeof(execution_budget) = 'object'),
+  error_code text,
+  error_summary text check (error_summary is null or char_length(error_summary) <= 1000),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  started_at timestamptz,
+  completed_at timestamptz
+
+ALTER STATEMENTS:
+  [20261118000100_violet_agent_control_plane.sql] ALTER TABLE agent_tasks enable row level security;
+
+
+====================================================
+TABLE: agent_tool_executions (Created in: 20261121000400_violet_live_operations_observability.sql)
+====================================================
+id uuid primary key default gen_random_uuid(),
+  task_id uuid not null references public.agent_tasks(id) on delete cascade,
+  run_id uuid references public.agent_runs(id) on delete cascade,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  agent_role text not null check (agent_role in ('orchestrator', 'architect', 'developer', 'reviewer')),
+  tool_name text not null,
+  input_params jsonb not null default '{}'::jsonb,
+  output_summary text,
+  is_success boolean not null default true,
+  duration_ms integer not null default 0,
+  created_at timestamptz not null default now()
+
+ALTER STATEMENTS:
+  [20261121000400_violet_live_operations_observability.sql] ALTER TABLE agent_tool_executions enable row level security;
+
+
+====================================================
+TABLE: agent_workflow_runs (Created in: 20261118000100_violet_agent_control_plane.sql)
+====================================================
+id uuid primary key default gen_random_uuid(),
+  workflow_id uuid not null references public.agent_workflows(id) on delete cascade,
+  task_id uuid references public.agent_tasks(id) on delete set null,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  workflow_version integer not null check (workflow_version > 0),
+  status text not null default 'queued'
+    check (status in ('queued', 'running', 'awaiting_approval', 'awaiting_human', 'completed', 'failed', 'cancelled')),
+  trigger_payload jsonb not null default '{}'::jsonb check (jsonb_typeof(trigger_payload) = 'object'),
+  started_at timestamptz,
+  completed_at timestamptz,
+  created_at timestamptz not null default now()
+
+ALTER STATEMENTS:
+  [20261118000100_violet_agent_control_plane.sql] ALTER TABLE agent_workflow_runs enable row level security;
+
+
+====================================================
+TABLE: agent_workflows (Created in: 20261118000100_violet_agent_control_plane.sql)
+====================================================
+id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  name text not null check (char_length(btrim(name)) between 1 and 120),
+  description text not null default '' check (char_length(description) <= 1000),
+  version integer not null default 1 check (version > 0),
+  enabled boolean not null default false,
+  trigger_type text not null default 'manual' check (trigger_type in ('manual', 'schedule', 'event')),
+  trigger_config jsonb not null default '{}'::jsonb check (jsonb_typeof(trigger_config) = 'object'),
+  definition jsonb not null default '{}'::jsonb check (jsonb_typeof(definition) = 'object'),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+
+ALTER STATEMENTS:
+  [20261118000100_violet_agent_control_plane.sql] ALTER TABLE agent_workflows enable row level security;
+
+
+====================================================
+TABLE: ai_connections (Created in: 20260722000200_universal_knowledge_retrieval.sql)
+====================================================
+id                    uuid        primary key default gen_random_uuid(),
+  user_id               uuid        not null references auth.users (id) on delete cascade,
+  name                  text        not null,
+  type                  text        not null default 'api_key'
+                                    check (type in ('mcp', 'api_key', 'oauth')),
+  api_key_hash          text,
+  capabilities          jsonb       not null default '[]',
+  allowed_provider_ids  text[]      not null default '{}',
+  allow_local_files     boolean     not null default false,
+  is_active             boolean     not null default true,
+  last_used_at          timestamptz,
+  created_at            timestamptz not null default now(),
+  updated_at            timestamptz not null default now()
+
+ALTER STATEMENTS:
+  [20260722000200_universal_knowledge_retrieval.sql] ALTER TABLE ai_connections enable row level security;
+
+
+====================================================
+TABLE: architectural_decisions (Created in: 20261121000300_violet_autonomous_engineering_intelligence.sql)
+====================================================
+id uuid primary key default gen_random_uuid(),
+  task_id uuid not null references public.agent_tasks(id) on delete cascade,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  title text not null,
+  status text not null default 'accepted' check (status in ('proposed', 'accepted', 'superseded', 'rejected')),
+  context text not null,
+  decision text not null,
+  consequences text not null,
+  models_consulted jsonb not null default '[]'::jsonb check (jsonb_typeof(models_consulted) = 'array'),
+  created_at timestamptz not null default now()
+
+ALTER STATEMENTS:
+  [20261121000300_violet_autonomous_engineering_intelligence.sql] ALTER TABLE architectural_decisions enable row level security;
+
+
+====================================================
+TABLE: audit_log_entries (Created in: 20260722000200_universal_knowledge_retrieval.sql)
+====================================================
+id            uuid        primary key default gen_random_uuid(),
+  user_id       uuid        not null references auth.users (id) on delete cascade,
+  event_type    text        not null
+                            check (event_type in ('search','sync','connect','disconnect','ai_access','export','delete')),
+  actor         text        not null,     -- "user" | AI connection name | "system"
+  query         text,
+  provider_ids  text[],
+  item_count    integer,
+  summary       text        not null default '',
+  metadata      jsonb       not null default '{}',
+  created_at    timestamptz not null default now()
+
+ALTER STATEMENTS:
+  [20260722000200_universal_knowledge_retrieval.sql] ALTER TABLE audit_log_entries enable row level security;
+
+
+====================================================
+TABLE: collection_memories (Created in: 20260720000400_persistent_organization.sql)
+====================================================
+collection_id uuid not null references public.collections(id) on delete cascade,
+  memory_id uuid not null references public.memories(id) on delete cascade,
+  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (collection_id, memory_id)
+
+ALTER STATEMENTS:
+  [20260720000400_persistent_organization.sql] ALTER TABLE collection_memories enable row level security;
+
+
+====================================================
+TABLE: collections (Created in: 20260720000400_persistent_organization.sql)
+====================================================
+id uuid primary key default gen_random_uuid(),
+  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  name text not null check (char_length(btrim(name)) between 1 and 80),
+  description text not null default '' check (char_length(description) <= 500),
+  color text not null default '#6657d9' check (color ~ '^#[0-9A-Fa-f]{6}$'),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+
+ALTER STATEMENTS:
+  [20260720000400_persistent_organization.sql] ALTER TABLE collections enable row level security;
+
+
+====================================================
+TABLE: engineering_findings (Created in: 20261121000300_violet_autonomous_engineering_intelligence.sql)
+====================================================
+id uuid primary key default gen_random_uuid(),
+  task_id uuid not null references public.agent_tasks(id) on delete cascade,
+  run_id uuid references public.agent_runs(id) on delete cascade,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  category text not null check (category in ('bug', 'regression', 'duplication', 'architecture', 'missing_test', 'security')),
+  severity text not null check (severity in ('critical', 'high', 'medium', 'low', 'info')),
+  title text not null,
+  description text not null,
+  file_path text,
+  line_number integer,
+  suggested_remediation text,
+  metadata jsonb not null default '{}'::jsonb check (jsonb_typeof(metadata) = 'object'),
+  created_at timestamptz not null default now()
+
+ALTER STATEMENTS:
+  [20261121000300_violet_autonomous_engineering_intelligence.sql] ALTER TABLE engineering_findings enable row level security;
+
+
+====================================================
+TABLE: entities (Created in: 20260720000500_memory_entities.sql)
+====================================================
+id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  display_name text not null check (char_length(btrim(display_name)) between 1 and 160),
+  normalized_name text not null check (char_length(btrim(normalized_name)) between 1 and 160),
+  entity_type text not null check (entity_type in ('person', 'organization', 'technology', 'date', 'url', 'place', 'concept')),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (user_id, entity_type, normalized_name)
+
+ALTER STATEMENTS:
+  [20260720000500_memory_entities.sql] ALTER TABLE entities enable row level security;
+
+
+====================================================
+TABLE: entity_relationships (Created in: 20260720000500_memory_entities.sql)
+====================================================
+id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  memory_id uuid not null references public.memories(id) on delete cascade,
+  source_entity_id uuid not null references public.entities(id) on delete cascade,
+  target_entity_id uuid not null references public.entities(id) on delete cascade,
+  relationship_type text not null check (char_length(btrim(relationship_type)) between 1 and 80),
+  confidence real not null default 0.7 check (confidence between 0 and 1),
+  evidence text not null default '' check (char_length(evidence) <= 300),
+  created_at timestamptz not null default now(),
+  check (source_entity_id <> target_entity_id),
+  unique (memory_id, source_entity_id, target_entity_id, relationship_type)
+
+ALTER STATEMENTS:
+  [20260720000500_memory_entities.sql] ALTER TABLE entity_relationships enable row level security;
+
+
+====================================================
+TABLE: integration_connections (Created in: 20260722000200_universal_knowledge_retrieval.sql)
+====================================================
+id                uuid        primary key default gen_random_uuid(),
+  user_id           uuid        not null references auth.users (id) on delete cascade,
+  provider_id       text        not null,
+  status            text        not null default 'disconnected'
+                                check (status in ('disconnected','connecting','connected','error','expired','syncing')),
+  display_name      text        not null default '',
+  access_token_enc  text,
+  refresh_token_enc text,
+  token_expires_at  timestamptz,
+  scopes            text[]      not null default '{}',
+  last_sync_at      timestamptz,
+  last_sync_stats   jsonb,
+  sync_cursor       text,
+  error_message     text,
+  metadata          jsonb       not null default '{}',
+  created_at        timestamptz not null default now(),
+  updated_at        timestamptz not null default now(),
+  unique (user_id, provider_id)
+
+ALTER STATEMENTS:
+  [20260722000200_universal_knowledge_retrieval.sql] ALTER TABLE integration_connections enable row level security;
+
+
+====================================================
+TABLE: issue_fix_attempts (Created in: 20261121000500_violet_issue_intelligence.sql)
+====================================================
+id uuid primary key default gen_random_uuid(),
+  issue_id text not null references public.agent_issues(id) on delete cascade,
+  attempt_number integer not null default 1,
+  assigned_agent text not null,
+  assigned_role text not null,
+  worktree_branch text,
+  commit_sha text,
+  test_results jsonb not null default '{}'::jsonb,
+  review_verdict text,
+  is_successful boolean not null default false,
+  logs text,
+  created_at timestamptz not null default now()
+
+ALTER STATEMENTS:
+  [20261121000500_violet_issue_intelligence.sql] ALTER TABLE issue_fix_attempts enable row level security;
+
+
+====================================================
+TABLE: knowledge_items (Created in: 20260722000200_universal_knowledge_retrieval.sql)
+====================================================
+id                uuid        primary key default gen_random_uuid(),
+  user_id           uuid        not null references auth.users (id) on delete cascade,
+  connection_id     uuid        references public.integration_connections (id) on delete cascade,
+  source_provider   text        not null,
+  source_type       text        not null,
+  source_id         text        not null,
+  title             text        not null default '',
+  content           text        not null default '',
+  snippet           text        not null default '',
+  metadata          jsonb       not null default '{}',
+  url               text,
+  local_path        text,
+  content_hash      text        not null default '',
+  storage_mode      text        not null default 'cloud'
+                                check (storage_mode in ('local', 'cloud', 'hybrid')),
+  sync_status       text        not null default 'synced'
+                                check (sync_status in ('synced', 'pending', 'error')),
+  search_document   tsvector generated always as (
+    to_tsvector('english', coalesce(title, '') || ' ' || coalesce(content, '') || ' ' || coalesce(snippet, ''))
+  ) stored,
+  created_at        timestamptz not null default now(),
+  updated_at        timestamptz not null default now(),
+  indexed_at        timestamptz,
+  unique (user_id, source_provider, source_id)
+
+ALTER STATEMENTS:
+  [20260722000200_universal_knowledge_retrieval.sql] ALTER TABLE knowledge_items enable row level security;
+
+
+====================================================
+TABLE: local_file_sync (Created in: 20260722000100_local_file_sync.sql)
+====================================================
+id              uuid        primary key default gen_random_uuid(),
+  file_id         text        not null,       -- matches LocalFileEntry.id on client
+  user_id         uuid        not null references auth.users (id) on delete cascade,
+
+  file_name       text        not null,
+  file_path       text        not null,       -- relative path within the folder
+  file_type       text        not null,       -- extension e.g. "md", "pdf"
+  file_size       bigint      not null default 0,
+
+  content_hash    text        not null,       -- SHA-256 hex of file content
+
+  storage_path    text,                       -- Supabase Storage object path
+
+  extracted_text  text,
+  summary         text,
+  tags            text[]      not null default '{}',
+
+  storage_mode    text        not null default 'hybrid'
+                              check (storage_mode in ('local', 'cloud', 'hybrid')),
+  folder_id       text        not null,       -- matches ConnectedFolder.id on client
+
+  modified_at     timestamptz not null,
+  created_at      timestamptz not null default now(),
+  updated_at      timestamptz not null default now(),
+
+  unique (user_id, file_id)
+
+ALTER STATEMENTS:
+  [20260722000100_local_file_sync.sql] ALTER TABLE local_file_sync enable row level security;
+
+
+====================================================
+TABLE: memories (Created in: 20260719000100_initial_neuron.sql)
+====================================================
+id uuid primary key default gen_random_uuid(),
+  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  title text not null check (char_length(title) between 1 and 240),
+  content text not null default '',
+  kind text not null default 'note' check (kind in ('note', 'upload', 'link', 'voice')),
+  source_url text,
+  summary text,
+  tags text[] not null default '{}',
+  metadata jsonb not null default '{}',
+  processing_status text not null default 'pending' check (processing_status in ('pending', 'processing', 'ready', 'failed')),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+
+ALTER STATEMENTS:
+  [20260719000100_initial_neuron.sql] ALTER TABLE memories enable row level security;
+  [20260719000200_universal_capture.sql] ALTER TABLE memories add column if not exists storage_bucket text;
+  [20260719000200_universal_capture.sql] ALTER TABLE memories add column if not exists storage_path text;
+  [20260719000200_universal_capture.sql] ALTER TABLE memories add column if not exists original_filename text;
+  [20260719000200_universal_capture.sql] ALTER TABLE memories add column if not exists mime_type text;
+  [20260719000200_universal_capture.sql] ALTER TABLE memories add column if not exists file_size bigint check (file_size is null or file_size >= 0);
+  [20260719000300_processing_worker.sql] ALTER TABLE memories add column if not exists extracted_text text;
+  [20260719000300_processing_worker.sql] ALTER TABLE memories add column if not exists extracted_at timestamptz;
+  [20260719000400_memory_deduplication.sql] ALTER TABLE memories add column if not exists content_fingerprint text
+check (
+  content_fingerprint is null
+  or content_fingerprint ~ '^(file|link):[0-9a-f]{64}$'
+);
+  [20260720000100_semantic_search.sql] ALTER TABLE memories add column if not exists embedding extensions.vector(1024),
+  add column if not exists embedding_model text,
+  add column if not exists embedded_at timestamptz;
+  [20260720000100_semantic_search.sql] ALTER TABLE memories add column if not exists search_document tsvector
+  generated always as (
+    setweight(to_tsvector('simple', coalesce(title, '')), 'A') ||
+    setweight(to_tsvector('simple', coalesce(summary, '')), 'B') ||
+    setweight(to_tsvector('simple', coalesce(extracted_text, '')), 'C') ||
+    setweight(to_tsvector('simple', coalesce(content, '')), 'C')
+  ) stored;
+  [20260720000400_persistent_organization.sql] ALTER TABLE memories add column if not exists is_favorite boolean not null default false;
+  [20260720000600_controlled_graph_backfill.sql] ALTER TABLE memories add column if not exists graph_analyzed_at timestamptz;
+  [20260720000900_controlled_study_backfill.sql] ALTER TABLE memories add column if not exists study_analyzed_at timestamptz;
+
+
+====================================================
+TABLE: memory_entities (Created in: 20260720000500_memory_entities.sql)
+====================================================
+memory_id uuid not null references public.memories(id) on delete cascade,
+  entity_id uuid not null references public.entities(id) on delete cascade,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  confidence real not null default 0.7 check (confidence between 0 and 1),
+  evidence text not null default '' check (char_length(evidence) <= 300),
+  created_at timestamptz not null default now(),
+  primary key (memory_id, entity_id)
+
+ALTER STATEMENTS:
+  [20260720000500_memory_entities.sql] ALTER TABLE memory_entities enable row level security;
+
+
+====================================================
+TABLE: model_usage (Created in: 20261121000100_violet_multi_agent_system.sql)
+====================================================
+id uuid primary key default gen_random_uuid(),
+  task_id uuid not null references public.agent_tasks(id) on delete cascade,
+  run_id uuid references public.agent_runs(id) on delete cascade,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  agent_role text not null,
+  provider text not null,
+  model text not null,
+  prompt_tokens integer not null default 0 check (prompt_tokens >= 0),
+  completion_tokens integer not null default 0 check (completion_tokens >= 0),
+  total_tokens integer not null default 0 check (total_tokens >= 0),
+  estimated_cost_usd numeric(10, 6) not null default 0 check (estimated_cost_usd >= 0),
+  latency_ms integer not null default 0 check (latency_ms >= 0),
+  created_at timestamptz not null default now()
+
+ALTER STATEMENTS:
+  [20261121000100_violet_multi_agent_system.sql] ALTER TABLE model_usage enable row level security;
+
+
+====================================================
+TABLE: processing_jobs (Created in: 20260719000200_universal_capture.sql)
+====================================================
+id uuid primary key default gen_random_uuid(),
+  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  memory_id uuid not null references public.memories(id) on delete cascade,
+  job_type text not null check (job_type in ('extract', 'ocr', 'transcribe', 'fetch_url', 'enrich', 'embed')),
+  status text not null default 'queued' check (status in ('queued', 'running', 'completed', 'failed')),
+  attempts integer not null default 0 check (attempts >= 0),
+  error_message text,
+  available_at timestamptz not null default now(),
+  locked_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (memory_id, job_type)
+
+ALTER STATEMENTS:
+  [20260719000200_universal_capture.sql] ALTER TABLE processing_jobs enable row level security;
+
+
+====================================================
+TABLE: profiles (Created in: 20260719000100_initial_neuron.sql)
+====================================================
+id uuid primary key references auth.users(id) on delete cascade,
+  display_name text check (char_length(display_name) <= 80),
+  avatar_url text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+
+ALTER STATEMENTS:
+  [20260719000100_initial_neuron.sql] ALTER TABLE profiles add column if not exists avatar_url text;
+  [20260719000100_initial_neuron.sql] ALTER TABLE profiles enable row level security;
+
+
+====================================================
+TABLE: sidekick_notes (Created in: 20260721000100_sidekick_sessions.sql)
+====================================================
+id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  session_id uuid not null references public.sidekick_sessions(id) on delete cascade,
+  memory_id uuid references public.memories(id) on delete set null,
+  body text not null check (char_length(btrim(body)) between 1 and 2000),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+
+ALTER STATEMENTS:
+  [20260721000100_sidekick_sessions.sql] ALTER TABLE sidekick_notes enable row level security;
+
+
+====================================================
+TABLE: sidekick_sessions (Created in: 20260721000100_sidekick_sessions.sql)
+====================================================
+id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  mode text not null check (mode in ('conversation', 'meeting')),
+  title text not null check (char_length(btrim(title)) between 1 and 120),
+  context_label text not null default '' check (char_length(context_label) <= 120),
+  goal text not null default '' check (char_length(goal) <= 1000),
+  selected_memory_ids uuid[] not null default '{}'::uuid[],
+  briefing jsonb not null default '{}'::jsonb,
+  last_used_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+
+ALTER STATEMENTS:
+  [20260721000100_sidekick_sessions.sql] ALTER TABLE sidekick_sessions enable row level security;
+
+
+====================================================
+TABLE: study_cards (Created in: 20260720000800_study_cards.sql)
+====================================================
+id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  memory_id uuid not null references public.memories(id) on delete cascade,
+  question text not null check (char_length(btrim(question)) between 1 and 300),
+  normalized_question text not null check (char_length(btrim(normalized_question)) between 1 and 300),
+  answer text not null check (char_length(btrim(answer)) between 1 and 1200),
+  distractors text[] not null default '{}'::text[] check (cardinality(distractors) <= 4),
+  confidence real not null default 0.7 check (confidence between 0 and 1),
+  evidence text not null default '' check (char_length(evidence) <= 300),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (memory_id, normalized_question)
+
+ALTER STATEMENTS:
+  [20260720000800_study_cards.sql] ALTER TABLE study_cards enable row level security;
+
+
+====================================================
+TABLE: violet_owner_bootstrap (Created in: 20261121000600_violet_owner_bootstrap.sql)
+====================================================
+id TEXT PRIMARY KEY DEFAULT 'singleton',
+    is_bootstrapped BOOLEAN NOT NULL DEFAULT false,
+    owner_email TEXT,
+    owner_id UUID,
+    bootstrapped_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+
+ALTER STATEMENTS:
+  [20261121000600_violet_owner_bootstrap.sql] ALTER TABLE violet_owner_bootstrap ENABLE ROW LEVEL SECURITY;
+
+

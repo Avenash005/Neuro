@@ -25,12 +25,13 @@ import {
   Globe,
   Bot,
   Activity,
+  Bug,
 } from "lucide-react";
 import type { BackendStatus, View } from "../../types/app";
 
 export function Logo() {
   return (
-    <div className="brand-mark" aria-label="Neuron">
+    <div className="brand-mark" aria-label="VIOLET">
       <span />
       <span />
       <span />
@@ -71,6 +72,9 @@ export function Sidebar({
   const nav = [
     { label: "Home" as View, displayLabel: "Dashboard", icon: Home },
     { label: "Sidekick" as View, displayLabel: "AI Chat", icon: Sparkles },
+    { label: "Violet" as View, displayLabel: "VIOLET AI", icon: Bot },
+    { label: "LiveOperations" as View, displayLabel: "Live Operations", icon: Activity },
+    { label: "Issues" as View, displayLabel: "Issues & Bugs", icon: Bug },
     { label: "Library" as View, displayLabel: "Memories", icon: Layers3 },
     { label: "Tasks" as View, displayLabel: "Tasks", icon: ListTodo },
     { label: "Study" as View, displayLabel: "Study", icon: GraduationCap },
@@ -92,7 +96,7 @@ export function Sidebar({
       <div className="sidebar-head">
         <div className="brand-lockup">
           <Logo />
-          {!collapsed && <span>neuron</span>}
+          {!collapsed && <span>violet</span>}
         </div>
         <button
           className="icon-button sidebar-toggle"
@@ -189,7 +193,7 @@ export function Header({
   openActivity,
   openCapture,
   onProfileClick,
-  profileName = "Neuron User",
+  profileName = "VIOLET User",
 }: HeaderProps) {
   const statusLabel =
     backendStatus === "connected"

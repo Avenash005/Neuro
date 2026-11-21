@@ -2,6 +2,9 @@ import type { LucideIcon } from "lucide-react";
 
 export type View =
   | "Home"
+  | "Violet"
+  | "LiveOperations"
+  | "Issues"
   | "Sidekick"
   | "Library"
   | "Tasks"

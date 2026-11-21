@@ -20,15 +20,22 @@ import { UniversalSearchView } from "./features/search/UniversalSearchView";
 import { IntegrationsHub } from "./features/integrations/IntegrationsHub";
 import { AIConnectionsView } from "./features/integrations/AIConnectionsView";
 import { AuditLogView } from "./features/integrations/AuditLogView";
+import { VioletCommandCenter } from "./features/violet/VioletCommandCenter";
+import { VioletLiveOperations } from "./features/violet/VioletLiveOperations";
+import { VioletIssuesCenter } from "./features/violet/VioletIssuesCenter";
+import { VioletOwnerLogin } from "./features/auth/VioletOwnerLogin";
+import { VioletOwnerSetup } from "./features/auth/VioletOwnerSetup";
+import { globalVioletAIClient } from "./lib/violet/ai/apiClient";
 import {
   addMemoryToCollection,
-  connectSupabase,
   createCollection,
   createFileMemory,
   createMemory,
   deleteMemory,
   deleteCollection,
   downloadMemoryFile,
+  getSession,
+  isOwnerUser,
   isSupabaseConfigured,
   listKnowledgeEntityData,
   listActionItems,
@@ -42,6 +49,7 @@ import {
   removeMemoryFromCollection,
   requestMemoryReanalysis,
   requestStudyReanalysis,
+  signOutUser,
   updateActionItemStatus,
   setMemoryFavorite,
   DuplicateMemoryError,
@@ -65,6 +73,10 @@ export default function App() {
   const [mobileNav, setMobileNav] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [authUser, setAuthUser] = useState<SupabaseUser | null>(null);
+  const [authChecking, setAuthChecking] = useState(isSupabaseConfigured);
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [configuredOwnerEmail, setConfiguredOwnerEmail] = useState<string | null>(null);
+  const [isBootstrapped, setIsBootstrapped] = useState<boolean>(true);
   const [backendStatus, setBackendStatus] = useState<BackendStatus>(isSupabaseConfigured ? "connecting" : "local");
   const [syncedMemories, setSyncedMemories] = useState<MemoryRecord[]>([]);
   const [syncedCollections, setSyncedCollections] = useState<CollectionRecord[]>([]);
@@ -113,8 +125,8 @@ export default function App() {
     setCaptureOpen(true);
   };
 
-  const profileName = authUser?.is_anonymous ? "Guest workspace" : authUser?.email?.split("@")[0] || "Neuron user";
-  const profileSubtitle = authUser?.is_anonymous ? "Make this account permanent" : "Synced account";
+  const profileName = authUser?.email ? authUser.email.split("@")[0] : "VIOLET owner";
+  const profileSubtitle = authUser?.email ? "VIOLET owner" : "Offline workspace";
 
   const content = useMemo(() => {
     if (activeView === "Library") return <LibraryView onSearch={search} openCapture={openCapture} memories={syncedMemories} collections={syncedCollections} onRetry={retryProcessing} onDownload={downloadFile} onDelete={removeMemory} onToggleFavorite={toggleFavorite} onToggleCollection={toggleCollectionMembership} openMemoryId={openMemoryId} onOpenedMemory={() => setOpenMemoryId(null)} initialSearchQuery={librarySearchQuery} />;
@@ -140,6 +152,11 @@ export default function App() {
       />
     );
     // ── Universal Knowledge Retrieval views ─────────────────────────────
+    if (activeView === "Violet") return <VioletCommandCenter />;
+    if (activeView === "LiveOperations")
+      return <VioletLiveOperations onNavigateToIssues={() => setActiveView("Issues")} />;
+    if (activeView === "Issues")
+      return <VioletIssuesCenter onNavigateToLiveOps={() => setActiveView("LiveOperations")} />;
     if (activeView === "UniversalSearch") return <UniversalSearchView memories={syncedMemories} />;
     if (activeView === "Integrations") return <IntegrationsHub memories={syncedMemories} />;
     if (activeView === "AIConnections") return <AIConnectionsView />;
@@ -148,24 +165,91 @@ export default function App() {
   }, [activeView, syncedMemories, syncedCollections, knowledgeEntities, actionItems, studyCards, openMemoryId, authUser, profileName, librarySearchQuery]);
 
   useEffect(() => {
-    if (!isSupabaseConfigured) return;
+    if (!isSupabaseConfigured) {
+      setAuthChecking(false);
+      return;
+    }
     let active = true;
     const initialize = async () => {
       try {
-        const user = await connectSupabase();
-        const [memories, collections, entities, tasks, cards] = await Promise.all([listMemories(), listCollections(), listKnowledgeEntityData(), listActionItems(), listStudyCards()]);
+        let ownerEmail: string | null = null;
+        let bootstrapped = true;
+        try {
+          const bootstrapStatus = await globalVioletAIClient.getBootstrapStatus();
+          bootstrapped = bootstrapStatus.isBootstrapped;
+          if (active) setIsBootstrapped(bootstrapStatus.isBootstrapped);
+          if (bootstrapStatus.ownerEmail) {
+            ownerEmail = bootstrapStatus.ownerEmail;
+            if (active) setConfiguredOwnerEmail(ownerEmail);
+          }
+        } catch {
+          // Backend may be starting or offline; fallback to client env
+        }
+
+        const session = await getSession();
+        if (!session?.user) {
+          if (active) {
+            setAuthUser(null);
+            setBackendStatus("local");
+            setAuthChecking(false);
+          }
+          return;
+        }
+
+        const user = session.user;
+        const ownerCheck = isOwnerUser(user, ownerEmail);
+        if (!ownerCheck.isOwner) {
+          await signOutUser();
+          if (active) {
+            setAuthUser(null);
+            setAuthError(ownerCheck.reason || "Access restricted to VIOLET owner.");
+            setBackendStatus("error");
+            setAuthChecking(false);
+          }
+          return;
+        }
+
+        // Owner authenticated
+        globalVioletAIClient.setAuthToken(session.access_token);
+        if (!bootstrapped && user.email) {
+          try {
+            await globalVioletAIClient.completeOwnerBootstrap(user.email, user.id);
+            if (active) setIsBootstrapped(true);
+          } catch {
+            // Already bootstrapped
+          }
+        }
+
         if (active) {
-          activeUserId.current = user ? user.id : null;
-          setAuthUser(user || null);
+          activeUserId.current = user.id;
+          setAuthUser(user);
+          setBackendStatus("connected");
+          setAuthError(null);
+        }
+
+        const [memories, collections, entities, tasks, cards] = await Promise.all([
+          listMemories(),
+          listCollections(),
+          listKnowledgeEntityData(),
+          listActionItems(),
+          listStudyCards(),
+        ]);
+        if (active) {
           setSyncedMemories(memories);
           setSyncedCollections(collections);
           setKnowledgeEntities(entities);
           setActionItems(tasks);
           setStudyCards(cards);
-          setBackendStatus("connected");
+          setAuthChecking(false);
+
           void processMemoryBacklog().then(async (backlog) => {
             if (!active || backlog.processed === 0) return;
-            const [updatedMemories, updatedEntities, updatedTasks, updatedCards] = await Promise.all([listMemories(), listKnowledgeEntityData(), listActionItems(), listStudyCards()]);
+            const [updatedMemories, updatedEntities, updatedTasks, updatedCards] = await Promise.all([
+              listMemories(),
+              listKnowledgeEntityData(),
+              listActionItems(),
+              listStudyCards(),
+            ]);
             setSyncedMemories(updatedMemories);
             setKnowledgeEntities(updatedEntities);
             setActionItems(updatedTasks);
@@ -173,42 +257,71 @@ export default function App() {
           }).catch((backlogError) => console.error("Background processing is unavailable", backlogError));
         }
       } catch (error) {
-        console.error("Supabase connection failed", error);
-        if (active) setBackendStatus("error");
+        console.error("Supabase initialization failed", error);
+        if (active) {
+          setBackendStatus("error");
+          setAuthChecking(false);
+        }
       }
     };
     void initialize();
-    return () => { active = false; };
+    return () => {
+      active = false;
+    };
   }, []);
 
-  useEffect(() => onAuthChange((user) => {
-    setAuthUser(user);
-    if (!user) {
-      activeUserId.current = null;
+  useEffect(() => {
+    return onAuthChange((user, session) => {
+      if (!user) {
+        activeUserId.current = null;
+        globalVioletAIClient.setAuthToken(null);
+        setAuthUser(null);
+        setSyncedMemories([]);
+        setSyncedCollections([]);
+        setKnowledgeEntities(EMPTY_KNOWLEDGE_ENTITY_DATA);
+        setActionItems([]);
+        setStudyCards([]);
+        return;
+      }
+
+      const ownerCheck = isOwnerUser(user, configuredOwnerEmail);
+      if (!ownerCheck.isOwner) {
+        void signOutUser();
+        setAuthUser(null);
+        setAuthError(ownerCheck.reason || "Access restricted to VIOLET owner.");
+        return;
+      }
+
+      if (session?.access_token) {
+        globalVioletAIClient.setAuthToken(session.access_token);
+      }
+      setAuthUser(user);
+      setBackendStatus("connected");
+      setAuthError(null);
+
+      if (activeUserId.current === user.id) return;
+      activeUserId.current = user.id;
       setSyncedMemories([]);
       setSyncedCollections([]);
       setKnowledgeEntities(EMPTY_KNOWLEDGE_ENTITY_DATA);
       setActionItems([]);
       setStudyCards([]);
-      return;
-    }
-    setBackendStatus("connected");
-    if (activeUserId.current === user.id) return;
-    activeUserId.current = user.id;
-    setSyncedMemories([]);
-    setSyncedCollections([]);
-    setKnowledgeEntities(EMPTY_KNOWLEDGE_ENTITY_DATA);
-    setActionItems([]);
-    setStudyCards([]);
-    void Promise.all([listMemories(), listCollections(), listKnowledgeEntityData(), listActionItems(), listStudyCards()]).then(([memories, collections, entities, tasks, cards]) => {
-      if (activeUserId.current !== user.id) return;
-      setSyncedMemories(memories);
-      setSyncedCollections(collections);
-      setKnowledgeEntities(entities);
-      setActionItems(tasks);
-      setStudyCards(cards);
-    }).catch((error) => console.error("Could not load the signed-in workspace", error));
-  }), []);
+      void Promise.all([
+        listMemories(),
+        listCollections(),
+        listKnowledgeEntityData(),
+        listActionItems(),
+        listStudyCards(),
+      ]).then(([memories, collections, entities, tasks, cards]) => {
+        if (activeUserId.current !== user.id) return;
+        setSyncedMemories(memories);
+        setSyncedCollections(collections);
+        setKnowledgeEntities(entities);
+        setActionItems(tasks);
+        setStudyCards(cards);
+      }).catch((error) => console.error("Could not load the signed-in workspace", error));
+    });
+  }, [configuredOwnerEmail]);
 
   useEffect(() => {
     if (!authUser || backendStatus !== "connected") return;
@@ -427,7 +540,7 @@ export default function App() {
 
   const saveMemory = async (memory: MemoryInput, file?: File, uploadOptions?: SignedUploadOptions) => {
     if (!isSupabaseConfigured) {
-      showToast("Add your Supabase key to .env.local to save memories");
+      showToast("Add your Supabase key to .env to save memories");
       return;
     }
     try {
@@ -449,6 +562,85 @@ export default function App() {
       throw error;
     }
   };
+
+  if (isSupabaseConfigured && authChecking) {
+    return (
+      <div className="flex h-screen w-screen items-center justify-center bg-slate-950 text-slate-100">
+        <div className="flex flex-col items-center gap-4 text-center">
+          <div className="relative flex h-14 w-14 items-center justify-center">
+            <div className="absolute inset-0 animate-ping rounded-2xl bg-violet-600/20" />
+            <div className="relative flex h-12 w-12 items-center justify-center rounded-xl bg-violet-600/30 border border-violet-500/40 text-violet-300">
+              <Sparkles size={24} />
+            </div>
+          </div>
+          <div>
+            <h2 className="text-base font-semibold text-slate-200">VIOLET AI</h2>
+            <p className="text-xs text-slate-400 mt-0.5">Verifying secure owner session...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (isSupabaseConfigured && !authUser) {
+    if (!isBootstrapped) {
+      return (
+        <VioletOwnerSetup
+          configuredOwnerEmail={configuredOwnerEmail}
+          onSuccess={(user, session) => {
+            setAuthUser(user);
+            setIsBootstrapped(true);
+            activeUserId.current = user.id;
+            globalVioletAIClient.setAuthToken(session.access_token);
+            setBackendStatus("connected");
+            setAuthError(null);
+            void Promise.all([
+              listMemories(),
+              listCollections(),
+              listKnowledgeEntityData(),
+              listActionItems(),
+              listStudyCards(),
+            ]).then(([memories, collections, entities, tasks, cards]) => {
+              setSyncedMemories(memories);
+              setSyncedCollections(collections);
+              setKnowledgeEntities(entities);
+              setActionItems(tasks);
+              setStudyCards(cards);
+            }).catch((err) => console.error("Could not load workspace after setup:", err));
+          }}
+          onNavigateToLogin={() => setIsBootstrapped(true)}
+        />
+      );
+    }
+
+    return (
+      <VioletOwnerLogin
+        configuredOwnerEmail={configuredOwnerEmail}
+        initialError={authError}
+        bootstrapLocked={true}
+        onSuccess={(user, session) => {
+          setAuthUser(user);
+          activeUserId.current = user.id;
+          globalVioletAIClient.setAuthToken(session.access_token);
+          setBackendStatus("connected");
+          setAuthError(null);
+          void Promise.all([
+            listMemories(),
+            listCollections(),
+            listKnowledgeEntityData(),
+            listActionItems(),
+            listStudyCards(),
+          ]).then(([memories, collections, entities, tasks, cards]) => {
+            setSyncedMemories(memories);
+            setSyncedCollections(collections);
+            setKnowledgeEntities(entities);
+            setActionItems(tasks);
+            setStudyCards(cards);
+          }).catch((err) => console.error("Could not load workspace after login:", err));
+        }}
+      />
+    );
+  }
 
   return (
     <div className="app-shell">
