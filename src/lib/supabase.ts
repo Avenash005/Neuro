@@ -282,26 +282,11 @@ export async function signInWithEmailPassword(
     return { user: data.user, session: data.session };
   }
 
-  try {
-    const res = await globalLocalAuthClient.signIn(email, password);
-    return {
-      user: res.user as unknown as User,
-      session: res.session as unknown as Session,
-    };
-  } catch (err) {
-    if (supabase) {
-      try {
-        const { data, error } = await supabase.auth.signInWithPassword({
-          email: email.trim(),
-          password,
-        });
-        if (!error && data.user && data.session) {
-          return { user: data.user, session: data.session };
-        }
-      } catch {}
-    }
-    throw err;
-  }
+  const res = await globalLocalAuthClient.signIn(email, password);
+  return {
+    user: res.user as unknown as User,
+    session: res.session as unknown as Session,
+  };
 }
 
 /**
@@ -321,25 +306,11 @@ export async function signUpWithEmailPassword(
     return { user: data.user, session: data.session };
   }
 
-  try {
-    const res = await globalLocalAuthClient.signUp(email, password);
-    return {
-      user: res.user as unknown as User,
-      session: res.session as unknown as Session,
-    };
-  } catch (err) {
-    if (supabase) {
-      try {
-        const { data, error } = await supabase.auth.signUp({
-          email: email.trim(),
-          password,
-          options: { emailRedirectTo: getAuthRedirectUrl() },
-        });
-        if (!error) return { user: data.user, session: data.session };
-      } catch {}
-    }
-    throw err;
-  }
+  const res = await globalLocalAuthClient.signUp(email, password);
+  return {
+    user: res.user as unknown as User,
+    session: res.session as unknown as Session,
+  };
 }
 
 /**

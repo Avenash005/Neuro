@@ -84,8 +84,16 @@ export class AuthService {
     const userId = crypto.randomUUID();
     const displayName = params.displayName || email.split('@')[0];
 
+    console.log(`[AuthService] Registering owner account: email=${email}, userId=${userId}`);
+
     // 5. Store user and update bootstrap in an atomic transaction
     await withTransaction(async (client) => {
+      // Clean up any stale unlinked orphan in auth.users for this email
+      await client.query(
+        `DELETE FROM auth.users WHERE lower(btrim(email)) = $1 AND id NOT IN (SELECT id FROM public.local_users);`,
+        [email]
+      );
+
       // Create user in local_users
       await client.query(
         `INSERT INTO public.local_users (id, email, role, display_name, password_hash, created_at, updated_at)
@@ -123,6 +131,8 @@ export class AuthService {
         [email, userId]
       );
     });
+
+    console.log(`[AuthService] Owner registered and committed to PostgreSQL: userId=${userId}`);
 
     // Sync in-memory bootstrap manager
     try {
@@ -176,14 +186,18 @@ export class AuthService {
     );
 
     if (!row || !row.password_hash) {
+      console.warn(`[AuthService] Login failed: email not found in local_users (${email})`);
       throw new Error('Invalid email or password.');
     }
 
     // 2. Verify password with Argon2id
     const isMatch = await verifyPassword(password, row.password_hash);
     if (!isMatch) {
+      console.warn(`[AuthService] Login failed: password mismatch for ${email}`);
       throw new Error('Invalid email or password.');
     }
+
+    console.log(`[AuthService] Credentials verified with Argon2id for ${email} (userId=${row.id})`);
 
     // 3. Verify single-owner restriction if configured
     const configuredOwnerEmail = (

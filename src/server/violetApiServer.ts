@@ -277,20 +277,29 @@ export function handleVioletApiRequest(
 
   // Public Route: POST /api/v1/auth/register
   if (req.method === "POST" && pathname === "/api/v1/auth/register") {
-    readJsonBody<{ email: string; password: string; displayName?: string }>()
+    readJsonBody<{ email?: string; password?: string; displayName?: string }>()
       .then(async (body) => {
         try {
+          if (!body.email || !body.password) {
+            sendJson({ error: "Email and password are required for registration." }, 400);
+            return;
+          }
+
+          const cleanEmail = body.email.trim().toLowerCase();
+          console.log(`[VioletAPI] Registration request received: email=${cleanEmail}`);
+
           const userAgent = (req.headers["user-agent"] as string) || undefined;
-          const ipAddress = (req.headers["x-forwarded-for"] as string) || req.socket.remoteAddress || undefined;
+          const ipAddress = (req.headers["x-forwarded-for"] as string) || req.socket?.remoteAddress || undefined;
 
           const result = await globalAuthService.registerOwner({
-            email: body.email,
+            email: cleanEmail,
             password: body.password,
             displayName: body.displayName,
             userAgent,
             ipAddress,
           });
 
+          console.log(`[VioletAPI] Registration committed to database: userId=${result.user.id}, email=${result.user.email}`);
           res.setHeader("Set-Cookie", buildSessionCookie(result.token, result.expiresAt, isHttps));
           sendJson(
             {
@@ -307,6 +316,7 @@ export function handleVioletApiRequest(
           );
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
+          console.warn(`[VioletAPI] Registration rejected: ${message}`);
           const statusCode =
             message.includes("already been provisioned") || message.includes("permanently closed") || message.includes("Access restricted")
               ? 403
@@ -314,25 +324,37 @@ export function handleVioletApiRequest(
           sendJson({ error: message }, statusCode);
         }
       })
-      .catch((err) => sendJson({ error: err.message }, 400));
+      .catch((err) => {
+        console.error(`[VioletAPI] Registration parse error:`, err.message);
+        sendJson({ error: err.message }, 400);
+      });
     return true;
   }
 
   // Public Route: POST /api/v1/auth/login
   if (req.method === "POST" && pathname === "/api/v1/auth/login") {
-    readJsonBody<{ email: string; password: string }>()
+    readJsonBody<{ email?: string; password?: string }>()
       .then(async (body) => {
         try {
+          if (!body.email || !body.password) {
+            sendJson({ error: "Email and password are required for sign-in." }, 400);
+            return;
+          }
+
+          const cleanEmail = body.email.trim().toLowerCase();
+          console.log(`[VioletAPI] Login request received: email=${cleanEmail}`);
+
           const userAgent = (req.headers["user-agent"] as string) || undefined;
-          const ipAddress = (req.headers["x-forwarded-for"] as string) || req.socket.remoteAddress || undefined;
+          const ipAddress = (req.headers["x-forwarded-for"] as string) || req.socket?.remoteAddress || undefined;
 
           const result = await globalAuthService.login({
-            email: body.email,
+            email: cleanEmail,
             password: body.password,
             userAgent,
             ipAddress,
           });
 
+          console.log(`[VioletAPI] Login succeeded: userId=${result.user.id}, email=${result.user.email}`);
           res.setHeader("Set-Cookie", buildSessionCookie(result.token, result.expiresAt, isHttps));
           sendJson(
             {
@@ -349,11 +371,15 @@ export function handleVioletApiRequest(
           );
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
+          console.warn(`[VioletAPI] Login failed: ${message}`);
           const statusCode = message.includes("Access restricted") ? 403 : 401;
           sendJson({ error: message }, statusCode);
         }
       })
-      .catch((err) => sendJson({ error: err.message }, 400));
+      .catch((err) => {
+        console.error(`[VioletAPI] Login parse error:`, err.message);
+        sendJson({ error: err.message }, 400);
+      });
     return true;
   }
 

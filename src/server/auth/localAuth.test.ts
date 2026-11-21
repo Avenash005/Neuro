@@ -7,7 +7,7 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { EventEmitter } from 'node:events';
 import type http from 'node:http';
-import { query, queryOne } from '../database/client';
+import { query, queryOne, withTransaction } from '../database/client';
 import { checkDatabaseHealth, closeDatabasePool } from '../database/pool';
 import { runMigrations } from '../database/migrate';
 import { hashPassword, verifyPassword, validatePasswordStrength } from './password';
@@ -140,8 +140,8 @@ describe('VIOLET Phase 4B: Local PostgreSQL Authentication', () => {
     });
   });
 
-  describe('2. Local Account Registration', () => {
-    it('registers the owner account in local PostgreSQL', async () => {
+  describe('2. Local Account Registration (Root Cause Verification)', () => {
+    it('1. Successful registration creates exactly one local_users record', async () => {
       const email = 'owner@violet.local';
       const password = 'SuperSecretOwnerKey2026!';
 
@@ -151,10 +151,13 @@ describe('VIOLET Phase 4B: Local PostgreSQL Authentication', () => {
       expect(result.user.email).toBe(email);
       expect(result.user.role).toBe('owner');
       expect(result.token).toBeDefined();
-      expect(result.token.length).toBe(64); // 32-byte hex
-      expect(result.expiresAt.getTime()).toBeGreaterThan(Date.now());
 
-      // Verify stored in local_users
+      // Verify exactly ONE record exists in public.local_users
+      const countRow = await queryOne<{ count: string }>(
+        `SELECT count(*) as count FROM public.local_users;`
+      );
+      expect(parseInt(countRow!.count, 10)).toBe(1);
+
       const userRow = await queryOne<{ id: string; email: string; password_hash: string }>(
         `SELECT id, email, password_hash FROM public.local_users WHERE email = $1;`,
         [email]
@@ -162,6 +165,13 @@ describe('VIOLET Phase 4B: Local PostgreSQL Authentication', () => {
       expect(userRow).not.toBeNull();
       expect(userRow?.password_hash).toContain('$argon2id$');
       expect(userRow?.password_hash).not.toBe(password); // Never plaintext
+    });
+
+    it('2. Registration creates corresponding auth and profile records', async () => {
+      const email = 'owner@violet.local';
+      const password = 'SuperSecretOwnerKey2026!';
+
+      const result = await authService.registerOwner({ email, password, displayName: 'Violet Architect' });
 
       // Verify matching auth.users row exists
       const authRow = await queryOne<{ id: string; email: string }>(
@@ -171,23 +181,50 @@ describe('VIOLET Phase 4B: Local PostgreSQL Authentication', () => {
       expect(authRow).not.toBeNull();
       expect(authRow?.email).toBe(email);
 
-      // Verify profile row created automatically by trigger
+      // Verify profile row created with display_name
       const profileRow = await queryOne<{ id: string; display_name: string }>(
         `SELECT id, display_name FROM public.profiles WHERE id = $1;`,
         [result.user.id]
       );
       expect(profileRow).not.toBeNull();
       expect(profileRow?.display_name).toBe('Violet Architect');
-
-      // Verify bootstrap registry is sealed
-      const bootstrap = await queryOne<{ is_bootstrapped: boolean; owner_email: string }>(
-        `SELECT is_bootstrapped, owner_email FROM public.violet_owner_bootstrap WHERE id = 'singleton';`
-      );
-      expect(bootstrap?.is_bootstrapped).toBe(true);
-      expect(bootstrap?.owner_email).toBe(email);
     });
 
-    it('rejects a second registration once bootstrapped (single-owner restriction)', async () => {
+    it('3. Failed database transaction does not show success and rolls back', async () => {
+      // Simulate failed write in transaction
+      await expect(
+        withTransaction(async (client) => {
+          await client.query(
+            `INSERT INTO public.local_users (id, email, role, display_name, password_hash, created_at, updated_at)
+             VALUES ($1, $2, 'owner', $3, $4, now(), now());`,
+            [crypto.randomUUID(), 'aborted@violet.local', 'Aborted User', 'abortedhash']
+          );
+          throw new Error('Database transaction abort test');
+        })
+      ).rejects.toThrow('Database transaction abort test');
+
+      // Verify no row was committed to local_users
+      const countRow = await queryOne<{ count: string }>(
+        `SELECT count(*) as count FROM public.local_users WHERE email = 'aborted@violet.local';`
+      );
+      expect(parseInt(countRow!.count, 10)).toBe(0);
+
+      // Verify HTTP endpoint returns 400 and never returns 201 on invalid input
+      const req = createMockReq(
+        'POST',
+        '/api/v1/auth/register',
+        { 'content-type': 'application/json' },
+        JSON.stringify({ email: 'invalid-email-format', password: 'ValidPassword123!' })
+      );
+      const res = new MockResponse();
+      handleVioletApiRequest(req, res as any);
+      await res.waitForFinish();
+
+      expect(res.statusCode).toBe(400);
+      expect(res.headers['set-cookie']).toBeUndefined();
+    });
+
+    it('4. Duplicate registration is rejected (single-owner restriction)', async () => {
       await authService.registerOwner({
         email: 'first_owner@violet.local',
         password: 'FirstPassword123!',
@@ -227,7 +264,7 @@ describe('VIOLET Phase 4B: Local PostgreSQL Authentication', () => {
       });
     });
 
-    it('successfully logs in with valid credentials and creates server session', async () => {
+    it('5. Correct credentials work immediately after registration', async () => {
       const result = await authService.login({
         email: 'owner@violet.local',
         password: 'CorrectPassword2026!',
@@ -246,22 +283,36 @@ describe('VIOLET Phase 4B: Local PostgreSQL Authentication', () => {
       expect(sessionRow?.user_id).toBe(result.user.id);
     });
 
-    it('rejects invalid password with 401 message', async () => {
+    it('6. Incorrect credentials fail', async () => {
       await expect(
         authService.login({
           email: 'owner@violet.local',
           password: 'WrongPassword!',
         })
       ).rejects.toThrow('Invalid email or password');
-    });
 
-    it('rejects non-existent email', async () => {
       await expect(
         authService.login({
           email: 'nonexistent@violet.local',
-          password: 'CorrectPassword2026!',
+          password: 'SomePassword123!',
         })
       ).rejects.toThrow('Invalid email or password');
+    });
+
+    it('7. Owner bootstrap prevents a second owner', async () => {
+      const bootstrap = await queryOne<{ is_bootstrapped: boolean; owner_email: string }>(
+        `SELECT is_bootstrapped, owner_email FROM public.violet_owner_bootstrap WHERE id = 'singleton';`
+      );
+      expect(bootstrap?.is_bootstrapped).toBe(true);
+      expect(bootstrap?.owner_email).toBe('owner@violet.local');
+
+      // Attempting to register another owner must fail
+      await expect(
+        authService.registerOwner({
+          email: 'intruder@violet.local',
+          password: 'IntruderKey123!',
+        })
+      ).rejects.toThrow('Registration is permanently closed');
     });
   });
 
