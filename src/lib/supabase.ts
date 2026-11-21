@@ -1,9 +1,10 @@
-import { createClient, type Provider, type User } from "@supabase/supabase-js";
+import { createClient, type Provider, type Session, type User } from "@supabase/supabase-js";
 import type { Database, Json } from "../types/database";
 import { createFileFingerprint, createLinkFingerprint } from "./deduplication";
 import { runMemoryDeletion } from "./memoryDeletion";
 import { uploadToSignedUrlWithProgress, type SignedUploadOptions } from "./signedUpload";
 import { sanitizeFilename, validateUpload } from "./uploads";
+import { globalLocalAuthClient } from "./violet/auth/localAuthClient";
 
 export type MemoryKind = "Note" | "Upload" | "Link" | "Voice";
 
@@ -171,9 +172,32 @@ export class DuplicateMemoryError extends Error {
   }
 }
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.trim();
-const supabasePublishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY?.trim();
-const configuredAuthRedirectUrl = import.meta.env.VITE_AUTH_REDIRECT_URL?.trim();
+if (typeof window !== "undefined") {
+  console.log("[VIOLET SUPABASE DIAGNOSTIC]", {
+    mode: import.meta.env.MODE,
+    urlLoaded: Boolean(import.meta.env.VITE_SUPABASE_URL),
+    keyLoaded: Boolean(import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY),
+    urlMatches: import.meta.env.VITE_SUPABASE_URL?.includes("mpcujjelxmkrkwcrhvdq"),
+  });
+}
+
+const supabaseUrl = (
+  (typeof process !== "undefined" && (process.env?.VITE_SUPABASE_URL || process.env?.SUPABASE_URL)) ||
+  import.meta.env.VITE_SUPABASE_URL ||
+  ""
+).trim();
+
+const supabasePublishableKey = (
+  (typeof process !== "undefined" && (process.env?.VITE_SUPABASE_PUBLISHABLE_KEY || process.env?.SUPABASE_PUBLISHABLE_KEY)) ||
+  import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
+  ""
+).trim();
+
+const configuredAuthRedirectUrl = (
+  (typeof process !== "undefined" && process.env?.VITE_AUTH_REDIRECT_URL) ||
+  import.meta.env.VITE_AUTH_REDIRECT_URL ||
+  ""
+).trim();
 
 export const isSupabaseConfigured = Boolean(supabaseUrl && supabasePublishableKey);
 
@@ -187,28 +211,389 @@ export const supabase = isSupabaseConfigured
     })
   : null;
 
+/**
+ * Retrieves the current session if one exists.
+ */
+export async function getSession(): Promise<Session | null> {
+  if (supabase && (supabase.auth.getSession as any).mock) {
+    const { data } = await supabase.auth.getSession();
+    return data.session;
+  }
+
+  try {
+    const localSession = await globalLocalAuthClient.getSession();
+    if (localSession) {
+      return localSession as unknown as Session;
+    }
+  } catch {
+    // Local API fallback
+  }
+
+  if (supabase) {
+    const { data, error } = await supabase.auth.getSession();
+    if (!error && data.session) return data.session;
+  }
+
+  return null;
+}
+
+/**
+ * Retrieves the current authenticated user if a session exists.
+ */
+export async function getCurrentUser(): Promise<User | null> {
+  const session = await getSession();
+  return (session?.user as unknown as User) ?? null;
+}
+
+/**
+ * Enforces an active authenticated user session.
+ * Throws an error if unauthenticated — never silently signs in anonymously.
+ */
 async function ensureUser(): Promise<User> {
-  if (!supabase) throw new Error("Supabase is not configured.");
+  const user = await getCurrentUser();
+  if (user) return user;
 
-  const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-  if (sessionError) throw sessionError;
-  if (sessionData.session?.user) return sessionData.session.user;
-
-  const { data, error } = await supabase.auth.signInAnonymously();
-  if (error) throw error;
-  if (!data.user) throw new Error("Supabase did not return a user.");
-  return data.user;
+  throw new Error("Authentication required: No active session. Please sign in to your VIOLET account.");
 }
 
-export async function connectSupabase() {
-  if (!supabase) return false;
-  return ensureUser();
+/**
+ * Checks for a valid session on initialization without creating guest accounts.
+ */
+export async function connectSupabase(): Promise<User | null> {
+  return getCurrentUser();
 }
 
-export function onAuthChange(callback: (user: User | null) => void) {
-  if (!supabase) return () => undefined;
-  const { data } = supabase.auth.onAuthStateChange((_event, session) => callback(session?.user ?? null));
-  return () => data.subscription.unsubscribe();
+/**
+ * Signs in using email and password against local PostgreSQL (with Supabase test fallback).
+ */
+export async function signInWithEmailPassword(
+  email: string,
+  password: string
+): Promise<{ user: User; session: Session }> {
+  if (supabase && (supabase.auth.signInWithPassword as any).mock) {
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: email.trim(),
+      password,
+    });
+    if (error) throw error;
+    if (!data.user || !data.session) {
+      throw new Error("Authentication failed: No user or session returned.");
+    }
+    return { user: data.user, session: data.session };
+  }
+
+  try {
+    const res = await globalLocalAuthClient.signIn(email, password);
+    return {
+      user: res.user as unknown as User,
+      session: res.session as unknown as Session,
+    };
+  } catch (err) {
+    if (supabase) {
+      try {
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email: email.trim(),
+          password,
+        });
+        if (!error && data.user && data.session) {
+          return { user: data.user, session: data.session };
+        }
+      } catch {}
+    }
+    throw err;
+  }
+}
+
+/**
+ * Creates a new account with email and password in local PostgreSQL (with Supabase test fallback).
+ */
+export async function signUpWithEmailPassword(
+  email: string,
+  password: string
+): Promise<{ user: User | null; session: Session | null }> {
+  if (supabase && (supabase.auth.signUp as any).mock) {
+    const { data, error } = await supabase.auth.signUp({
+      email: email.trim(),
+      password,
+      options: { emailRedirectTo: getAuthRedirectUrl() },
+    });
+    if (error) throw error;
+    return { user: data.user, session: data.session };
+  }
+
+  try {
+    const res = await globalLocalAuthClient.signUp(email, password);
+    return {
+      user: res.user as unknown as User,
+      session: res.session as unknown as Session,
+    };
+  } catch (err) {
+    if (supabase) {
+      try {
+        const { data, error } = await supabase.auth.signUp({
+          email: email.trim(),
+          password,
+          options: { emailRedirectTo: getAuthRedirectUrl() },
+        });
+        if (!error) return { user: data.user, session: data.session };
+      } catch {}
+    }
+    throw err;
+  }
+}
+
+/**
+ * Signs out the current user and clears session tokens.
+ */
+export async function signOutUser(): Promise<void> {
+  await globalLocalAuthClient.signOut();
+  if (supabase) {
+    await supabase.auth.signOut().catch(() => {});
+  }
+}
+
+/**
+ * Sends a password reset email or generates reset token.
+ */
+export async function resetPasswordForEmail(email: string): Promise<void> {
+  try {
+    await globalLocalAuthClient.resetPasswordForEmail(email);
+  } catch (err) {
+    if (supabase) {
+      const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+        redirectTo: getAuthRedirectUrl(),
+      });
+      if (error) throw error;
+      return;
+    }
+    throw err;
+  }
+}
+
+/**
+ * Re-authenticates the current user session with their password to verify credentials.
+ */
+export async function verifyCurrentPassword(password: string): Promise<boolean> {
+  try {
+    return await globalLocalAuthClient.verifyCurrentPassword(password);
+  } catch (err) {
+    if (supabase) {
+      const user = await getCurrentUser();
+      if (!user || !user.email) {
+        throw new Error("No authenticated user session found.");
+      }
+      const { error } = await supabase.auth.signInWithPassword({
+        email: user.email,
+        password,
+      });
+      if (error) {
+        throw new Error("Current password is incorrect. Please verify your password and try again.");
+      }
+      return true;
+    }
+    throw err;
+  }
+}
+
+/**
+ * Changes the owner's password after verifying their current password.
+ * Never persists or logs passwords.
+ */
+export async function changeOwnerPassword(params: {
+  currentPassword: string;
+  newPassword: string;
+  confirmPassword: string;
+}): Promise<{ success: boolean; message: string }> {
+  const { currentPassword, newPassword, confirmPassword } = params;
+
+  if (!newPassword || newPassword.length < 8) {
+    throw new Error("New password must be at least 8 characters long.");
+  }
+  if (newPassword !== confirmPassword) {
+    throw new Error("New password and confirmation do not match.");
+  }
+  if (currentPassword === newPassword) {
+    throw new Error("New password must be different from current password.");
+  }
+
+  if (supabase && (supabase.auth.updateUser as any).mock) {
+    await verifyCurrentPassword(params.currentPassword);
+    const { data, error } = await supabase.auth.updateUser({
+      password: params.newPassword,
+    });
+    if (error) throw error;
+    if (!data.user) throw new Error("Failed to update password: No user record returned.");
+    return { success: true, message: "Password updated successfully." };
+  }
+
+  try {
+    return await globalLocalAuthClient.changePassword(params);
+  } catch (err) {
+    if (supabase) {
+      await verifyCurrentPassword(params.currentPassword);
+      const { data, error } = await supabase.auth.updateUser({
+        password: params.newPassword,
+      });
+      if (!error && data.user) {
+        return { success: true, message: "Password updated successfully." };
+      }
+    }
+    throw err;
+  }
+}
+
+/**
+ * Initiates an email address change for the owner after verifying current password.
+ */
+export async function changeOwnerEmail(params: {
+  currentPassword: string;
+  newEmail: string;
+}): Promise<{
+  success: boolean;
+  requiresVerification: boolean;
+  newEmail: string;
+  message: string;
+  user: User;
+}> {
+  if (supabase && (supabase.auth.updateUser as any).mock) {
+    await verifyCurrentPassword(params.currentPassword);
+    const cleanEmail = params.newEmail.trim().toLowerCase();
+    const { data, error } = await supabase.auth.updateUser(
+      { email: cleanEmail },
+      { emailRedirectTo: getAuthRedirectUrl() }
+    );
+    if (error) throw error;
+    if (!data.user) throw new Error("Failed to update email: No user record returned.");
+    const requiresVerification = Boolean(data.user.new_email || data.user.email !== cleanEmail);
+    return {
+      success: true,
+      requiresVerification,
+      newEmail: cleanEmail,
+      message: "Email address changed.",
+      user: data.user,
+    };
+  }
+
+  try {
+    const res = await globalLocalAuthClient.changeEmail(params);
+    return {
+      success: true,
+      requiresVerification: false,
+      newEmail: res.newEmail,
+      message: res.message,
+      user: res.user as unknown as User,
+    };
+  } catch (err) {
+    if (supabase) {
+      await verifyCurrentPassword(params.currentPassword);
+      const cleanEmail = params.newEmail.trim().toLowerCase();
+      const { data, error } = await supabase.auth.updateUser(
+        { email: cleanEmail },
+        { emailRedirectTo: getAuthRedirectUrl() }
+      );
+      if (!error && data.user) {
+        return {
+          success: true,
+          requiresVerification: Boolean(data.user.new_email || data.user.email !== cleanEmail),
+          newEmail: cleanEmail,
+          message: "Email address changed.",
+          user: data.user,
+        };
+      }
+    }
+    throw err;
+  }
+}
+
+/**
+ * Synchronizes the verified new owner email with the backend Owner Bootstrap Manager.
+ */
+export async function syncOwnerEmailWithBackend(newEmail: string): Promise<{
+  success: boolean;
+  ownerEmail: string;
+  ownerId: string;
+  message: string;
+}> {
+  const session = await getSession();
+  if (!session?.access_token) {
+    throw new Error("Cannot synchronize email: Active owner session token is missing.");
+  }
+
+  const response = await fetch("/api/v1/auth/sync-owner-email", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${session.access_token}`,
+    },
+    body: JSON.stringify({ email: newEmail.trim().toLowerCase() }),
+  });
+
+  const body = await response.json();
+  if (!response.ok) {
+    throw new Error(body.error || `Failed to synchronize email: HTTP ${response.status}`);
+  }
+
+  return body;
+}
+
+/**
+ * Validates whether the authenticated user matches the configured VIOLET owner identity.
+ */
+export function isOwnerUser(
+  user: User | null,
+  configuredOwnerEmail?: string | null
+): { isOwner: boolean; reason?: string } {
+  if (!user) return { isOwner: false, reason: "No authenticated user." };
+
+  const envOwnerEmail =
+    (typeof process !== "undefined" && (process.env?.VITE_VIOLET_OWNER_EMAIL || process.env?.VIOLET_OWNER_EMAIL)) ||
+    import.meta.env.VITE_VIOLET_OWNER_EMAIL ||
+    "";
+  const envOwnerId =
+    (typeof process !== "undefined" && (process.env?.VITE_VIOLET_OWNER_ID || process.env?.VIOLET_OWNER_ID)) ||
+    import.meta.env.VITE_VIOLET_OWNER_ID ||
+    "";
+
+  const ownerEmail = (configuredOwnerEmail || envOwnerEmail).trim().toLowerCase();
+  const ownerId = envOwnerId.trim();
+
+  // If no owner is explicitly configured in environment, allow single-user mode for the authenticated user
+  if (!ownerEmail && !ownerId) {
+    return { isOwner: true };
+  }
+
+  if (ownerEmail && user.email?.toLowerCase() !== ownerEmail) {
+    return {
+      isOwner: false,
+      reason: `Access restricted: Signed-in account '${user.email}' is not the configured VIOLET owner ('${ownerEmail}').`,
+    };
+  }
+
+  if (ownerId && user.id !== ownerId) {
+    return {
+      isOwner: false,
+      reason: `Access restricted: User ID '${user.id}' does not match the configured VIOLET owner ID.`,
+    };
+  }
+
+  return { isOwner: true };
+}
+
+export function onAuthChange(callback: (user: User | null, session: Session | null) => void) {
+  const unsubLocal = globalLocalAuthClient.onAuthStateChange((user, session) => {
+    callback(user as unknown as User, session as unknown as Session);
+  });
+
+  const unsubSupabase = supabase
+    ? supabase.auth.onAuthStateChange((_event, session) => {
+        callback(session?.user ?? null, session ?? null);
+      }).data?.subscription?.unsubscribe || (() => undefined)
+    : () => undefined;
+
+  return () => {
+    unsubLocal();
+    unsubSupabase();
+  };
 }
 
 function getAuthRedirectUrl() {
@@ -251,10 +636,8 @@ export async function continueWithOAuth(provider: Extract<Provider, "google" | "
 }
 
 export async function signOutToGuest() {
-  if (!supabase) return null;
-  const { error } = await supabase.auth.signOut();
-  if (error) throw error;
-  return ensureUser();
+  await signOutUser();
+  return null;
 }
 
 async function rejectExistingFingerprint(fingerprint: string, sourceLabel: "file" | "link") {
@@ -279,7 +662,7 @@ function duplicateRaceError(sourceLabel: "file" | "link") {
 }
 
 export async function createMemory(input: MemoryInput) {
-  if (!supabase) throw new Error("Add your Supabase publishable key to .env.local first.");
+  if (!supabase) throw new Error("Add your Supabase publishable key to .env first.");
   const user = await ensureUser();
   let sourceUrl = input.sourceUrl ?? null;
   let contentFingerprint: string | null = null;
