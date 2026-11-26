@@ -2,7 +2,7 @@
   "name": "neuro-ai",
   "private": true,
   "version": "0.2.0",
-  "description": "Neuro AI — Open-source personal AI second brain and knowledge workspace",
+  "description": "VIOLET AI — Personal AI Operating System powered by Neuro",
   "license": "MIT",
   "type": "module",
   "scripts": {
@@ -16,13 +16,15 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@supabase/server": "^1.4.0",
+    "@supabase/server": "^1.9.2",
     "@supabase/supabase-js": "^2.110.7",
     "@tailwindcss/vite": "^4.1.18",
+    "argon2": "^0.45.2",
     "cmdk": "^1.1.1",
     "framer-motion": "^12.42.2",
     "lucide-react": "^1.24.0",
     "motion": "^12.42.2",
+    "pg": "^8.23.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-router-dom": "^7.18.1",
@@ -30,6 +32,7 @@
   },
   "devDependencies": {
     "@types/node": "^24.10.1",
+    "@types/pg": "^8.23.1",
     "@types/react": "^18.3.1",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^5.1.1",

@@ -2,7 +2,7 @@ import { motion } from "framer-motion";
 import { ArrowRight, Check, Code2, LogOut, Mail, ShieldCheck, Sparkles, X } from "lucide-react";
 import { useState } from "react";
 import type { User } from "@supabase/supabase-js";
-import { continueWithOAuth, linkAnonymousEmail, signInExistingWithEmail, signOutToGuest } from "../../lib/supabase";
+import { continueWithOAuth, linkAnonymousEmail, signInExistingWithEmail, signOutUser } from "../../lib/supabase";
 
 type AuthModalProps = {
   user: User | null;
@@ -49,7 +49,7 @@ export function AuthModal({ user, onClose }: AuthModalProps) {
         <div className="modal-header"><div><span className="card-kicker"><ShieldCheck size={14} /> Secure account</span><h2>Your Neuron account</h2></div><button className="icon-button" onClick={onClose}><X size={19} /></button></div>
         <div className="account-summary"><span className="account-avatar">{(user.email?.[0] ?? "N").toUpperCase()}</span><div><strong>{user.email ?? "Connected account"}</strong><small>Your memories sync securely across devices.</small></div><span className="verified-badge"><Check size={12} /> Verified</span></div>
         <div className="account-security"><ShieldCheck size={18} /><span><strong>Owner-only data access</strong><small>Supabase Row Level Security scopes every memory to your account.</small></span></div>
-        <div className="modal-footer"><span>Signed in securely</span><div><button className="cancel" onClick={onClose}>Close</button><button className="save signout" disabled={busy} onClick={() => run(signOutToGuest, "Signed out. A new guest workspace is ready.")}><LogOut size={15} /> Sign out</button></div></div>
+        <div className="modal-footer"><span>Signed in securely</span><div><button className="cancel" onClick={onClose}>Close</button><button className="save signout" disabled={busy} onClick={() => run(async () => { await signOutUser(); onClose(); }, "Signed out.")}><LogOut size={15} /> Sign out</button></div></div>
       </motion.div>
     );
   }

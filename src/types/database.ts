@@ -257,6 +257,307 @@ export type Database = {
         };
         Relationships: [];
       };
+      agent_tasks: {
+        Row: {
+          id: string;
+          user_id: string;
+          goal: string;
+          source: string;
+          status: string;
+          plan: Json;
+          constraints: Json;
+          execution_budget: Json;
+          error_code: string | null;
+          error_summary: string | null;
+          created_at: string;
+          updated_at: string;
+          started_at: string | null;
+          completed_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          goal: string;
+          source?: string;
+          status?: string;
+          plan?: Json;
+          constraints?: Json;
+          execution_budget?: Json;
+          error_code?: string | null;
+          error_summary?: string | null;
+          created_at?: string;
+          updated_at?: string;
+          started_at?: string | null;
+          completed_at?: string | null;
+        };
+        Update: {
+          goal?: string;
+          source?: string;
+          status?: string;
+          plan?: Json;
+          constraints?: Json;
+          execution_budget?: Json;
+          error_code?: string | null;
+          error_summary?: string | null;
+          updated_at?: string;
+          started_at?: string | null;
+          completed_at?: string | null;
+        };
+        Relationships: [];
+      };
+      agent_task_steps: {
+        Row: {
+          id: string;
+          task_id: string;
+          user_id: string;
+          step_order: number;
+          title: string;
+          tool_name: string;
+          risk: string;
+          status: string;
+          arguments_hash: string | null;
+          arguments_preview: Json;
+          result_summary: string | null;
+          evidence: Json;
+          error_code: string | null;
+          created_at: string;
+          started_at: string | null;
+          completed_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          task_id: string;
+          user_id: string;
+          step_order: number;
+          title: string;
+          tool_name: string;
+          risk: string;
+          status?: string;
+          arguments_hash?: string | null;
+          arguments_preview?: Json;
+          result_summary?: string | null;
+          evidence?: Json;
+          error_code?: string | null;
+          created_at?: string;
+          started_at?: string | null;
+          completed_at?: string | null;
+        };
+        Update: {
+          step_order?: number;
+          title?: string;
+          tool_name?: string;
+          risk?: string;
+          status?: string;
+          arguments_hash?: string | null;
+          arguments_preview?: Json;
+          result_summary?: string | null;
+          evidence?: Json;
+          error_code?: string | null;
+          started_at?: string | null;
+          completed_at?: string | null;
+        };
+        Relationships: [];
+      };
+      agent_approvals: {
+        Row: {
+          id: string;
+          task_id: string;
+          step_id: string;
+          user_id: string;
+          operation: string;
+          consequence: string;
+          arguments_hash: string;
+          arguments_preview: Json;
+          status: string;
+          expires_at: string;
+          decided_at: string | null;
+          consumed_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          task_id: string;
+          step_id: string;
+          user_id: string;
+          operation: string;
+          consequence: string;
+          arguments_hash: string;
+          arguments_preview?: Json;
+          status?: string;
+          expires_at: string;
+          decided_at?: string | null;
+          consumed_at?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          status?: string;
+          decided_at?: string | null;
+          consumed_at?: string | null;
+        };
+        Relationships: [];
+      };
+      agent_handoffs: {
+        Row: {
+          id: string;
+          task_id: string;
+          step_id: string | null;
+          user_id: string;
+          reason: string;
+          instructions: string;
+          visible_client: string;
+          status: string;
+          created_at: string;
+          resumed_at: string | null;
+          expires_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          task_id: string;
+          step_id?: string | null;
+          user_id: string;
+          reason: string;
+          instructions: string;
+          visible_client: string;
+          status?: string;
+          created_at?: string;
+          resumed_at?: string | null;
+          expires_at?: string | null;
+        };
+        Update: {
+          status?: string;
+          resumed_at?: string | null;
+          expires_at?: string | null;
+        };
+        Relationships: [];
+      };
+      agent_devices: {
+        Row: {
+          id: string;
+          user_id: string;
+          name: string;
+          platform: string;
+          public_key_fingerprint: string;
+          scopes: string[];
+          last_seen_at: string | null;
+          revoked_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          name: string;
+          platform: string;
+          public_key_fingerprint: string;
+          scopes?: string[];
+          last_seen_at?: string | null;
+          revoked_at?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          name?: string;
+          scopes?: string[];
+          last_seen_at?: string | null;
+          revoked_at?: string | null;
+        };
+        Relationships: [];
+      };
+      agent_workflows: {
+        Row: {
+          id: string;
+          user_id: string;
+          name: string;
+          description: string;
+          version: number;
+          enabled: boolean;
+          trigger_type: string;
+          trigger_config: Json;
+          definition: Json;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          name: string;
+          description?: string;
+          version?: number;
+          enabled?: boolean;
+          trigger_type?: string;
+          trigger_config?: Json;
+          definition?: Json;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          name?: string;
+          description?: string;
+          version?: number;
+          enabled?: boolean;
+          trigger_type?: string;
+          trigger_config?: Json;
+          definition?: Json;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      agent_workflow_runs: {
+        Row: {
+          id: string;
+          workflow_id: string;
+          task_id: string | null;
+          user_id: string;
+          workflow_version: number;
+          status: string;
+          trigger_payload: Json;
+          started_at: string | null;
+          completed_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          workflow_id: string;
+          task_id?: string | null;
+          user_id: string;
+          workflow_version: number;
+          status?: string;
+          trigger_payload?: Json;
+          started_at?: string | null;
+          completed_at?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          status?: string;
+          started_at?: string | null;
+          completed_at?: string | null;
+        };
+        Relationships: [];
+      };
+      agent_task_events: {
+        Row: {
+          id: string;
+          task_id: string;
+          user_id: string;
+          event_type: string;
+          summary: string;
+          details: Json;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          task_id: string;
+          user_id: string;
+          event_type: string;
+          summary: string;
+          details?: Json;
+          created_at?: string;
+        };
+        Update: {
+          event_type?: string;
+          summary?: string;
+          details?: Json;
+        };
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {

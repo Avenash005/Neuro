@@ -1,4 +1,4 @@
-# Neuro AI — The Extensible Personal AI Second Brain
+# VIOLET AI — Personal AI Operating System, powered by Neuro
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.9-blue.svg)](https://www.typescriptlang.org/)
@@ -6,7 +6,23 @@
 [![Vite](https://img.shields.io/badge/Vite-7.2-646cff.svg)](https://vitejs.dev/)
 [![Supabase](https://img.shields.io/badge/Supabase-Database%20%26%20Auth-3ECF8E.svg)](https://supabase.com/)
 
-Neuro AI is a privacy-first, hybrid personal knowledge workspace and AI second brain. It connects your notes, documents, local files, and external platforms (GitHub, Google Drive, Notion, Slack) into a searchable memory system with on-device indexing and grounded AI assistance.
+VIOLET AI is evolving from Neuro, a privacy-first personal AI second brain, into a permissioned personal AI operating system. Neuro remains the memory and knowledge layer: local-first files, semantic retrieval, a knowledge graph, model routing and provider connectors. VIOLET adds the orchestration layer for Windows PC automation, visible browser workflows, developer tools, communication, shopping, scheduling and multi-agent skills. This repository contains the existing Neuro product plus the first VIOLET architecture and local-agent foundations; not every planned integration is connected yet.
+
+---
+
+## VIOLET operating system direction
+
+VIOLET uses one orchestrator with typed tools, specialized skills and a permission gateway. It is designed to act across the user's approved Windows folders, browser sessions and connected services, while pausing for user action when a workflow reaches CAPTCHA, OTP, MFA, payment, consent or another sensitive boundary.
+
+**Current VIOLET foundations in this branch:**
+- Product architecture and phased implementation backlog in `docs/VIOLET_PRODUCT_ARCHITECTURE.md` and `docs/VIOLET_IMPLEMENTATION_BACKLOG.md`.
+- Shared task, tool, approval, device and human-handoff contracts under `src/types/violet.ts`.
+- Tool registry, policy gate and task lifecycle state machine under `src/lib/violet/`.
+- Owner-scoped Supabase tables for tasks, approvals, handoffs, paired devices and workflows.
+- A Windows localhost agent starter under `apps/violet-local-agent/`, with approved-root file access, create-only writes, named command allowlists, screenshot capture and audit logging.
+- A VIOLET command-center screen in the React app.
+
+**Not yet implemented:** remote device pairing, full Windows UI Automation, browser pause/resume, outbound messaging, live shopping catalogs/checkout, voice, workflow scheduling and mobile companion. The UI marks these as planned rather than connected.
 
 ---
 
